@@ -9,7 +9,7 @@ use std::{
     thread,
 };
 
-fn handle_client(mut stream: TcpStream) {
+fn handle_client(stream: TcpStream) {
     debug!("Accepted connection from {}", stream.peer_addr().unwrap());
 
     MinecraftConnection::new(stream).receive_loop();

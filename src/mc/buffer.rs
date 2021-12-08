@@ -31,12 +31,32 @@ impl WriteBuffer {
         }
     }
 
+    pub fn write_u8(&mut self, value: u8) {
+        let bytes = value.to_be_bytes();
+        self.write_bytes(&bytes);
+    }
+
     pub fn write_u16(&mut self, value: u16) {
         let bytes = value.to_be_bytes();
         self.write_bytes(&bytes);
     }
 
     pub fn write_i64(&mut self, value: i64) {
+        let bytes = value.to_be_bytes();
+        self.write_bytes(&bytes);
+    }
+
+    pub fn write_i32(&mut self, value: i32) {
+        let bytes = value.to_be_bytes();
+        self.write_bytes(&bytes);
+    }
+
+    pub fn write_f32(&mut self, value: f32) {
+        let bytes = value.to_be_bytes();
+        self.write_bytes(&bytes);
+    }
+
+    pub fn write_f64(&mut self, value: f64) {
         let bytes = value.to_be_bytes();
         self.write_bytes(&bytes);
     }

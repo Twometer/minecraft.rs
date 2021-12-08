@@ -1,8 +1,8 @@
 use std::io::Write;
 use std::{io::Read, net::TcpStream};
 
-use log::debug;
 use log::info;
+use log::{debug, trace};
 
 use crate::mc::read_var_int;
 use crate::mc::ReadBuffer;
@@ -13,6 +13,7 @@ pub struct MinecraftConnection {
     stream: TcpStream,
     compression_threshold: usize,
     play_state: PlayState,
+    eid_counter: i32,
 }
 
 #[derive(Debug)]
@@ -29,6 +30,7 @@ impl MinecraftConnection {
             stream,
             compression_threshold: 0,
             play_state: PlayState::Handshake,
+            eid_counter: 0,
         }
     }
 
@@ -54,9 +56,10 @@ impl MinecraftConnection {
             }
 
             let packet_id = buf.read_var_int();
-            debug!(
+            trace!(
                 "Read packet {} with length {} from stream",
-                packet_id, packet_len
+                packet_id,
+                packet_len
             );
 
             match self.play_state {
@@ -134,7 +137,62 @@ impl MinecraftConnection {
         }
     }
 
-    fn handle_login_packet(&self, packet_id: i32, buf: &mut ReadBuffer) {}
+    fn handle_login_packet(&mut self, packet_id: i32, buf: &mut ReadBuffer) {
+        match packet_id {
+            0x00 => {
+                // Decode 'Login start'
+                let username = buf.read_string();
 
-    fn handle_play_packet(&self, packet_id: i32, buf: &mut ReadBuffer) {}
+                // Send 'Set compression'
+                let mut set_compression = WriteBuffer::new();
+                set_compression.write_varint(8192);
+                self.send_packet(0x03, &set_compression);
+                self.compression_threshold = 8192;
+
+                // Send 'Login success'
+                let mut response = WriteBuffer::new();
+                response.write_string("3b9f9997-d547-4f70-a37c-8fffbe706002"); // TODO: Use correct UUID
+                response.write_string(&username);
+                self.send_packet(0x02, &response);
+
+                // Change play state
+                self.change_state(PlayState::Play as i32);
+                self.eid_counter += 1;
+
+                let player_eid = self.eid_counter;
+                info!(
+                    "Player {} logged in with entity id {}",
+                    username, player_eid
+                );
+
+                // Send 'Join Game'
+                let mut join_game = WriteBuffer::new();
+                join_game.write_i32(player_eid);
+                join_game.write_u8(1); // Gamemode creative
+                join_game.write_u8(0); // Overworld
+                join_game.write_u8(0); // Peaceful
+                join_game.write_u8(4); // Size of player list
+                join_game.write_string("default");
+                join_game.write_u8(0);
+                self.send_packet(0x01, &join_game);
+
+                // Send spawn position
+                let mut spawn_pos = WriteBuffer::new();
+                spawn_pos.write_f64(0.0); // X
+                spawn_pos.write_f64(0.0); // Y
+                spawn_pos.write_f64(0.0); // Z
+                spawn_pos.write_f32(0.0); // Yaw
+                spawn_pos.write_f32(0.0); // Pitch
+                spawn_pos.write_u8(0); // Flags
+                self.send_packet(0x08, &spawn_pos);
+            }
+            _ => panic!("Received invalid packet {}", packet_id),
+        }
+    }
+
+    fn handle_play_packet(&self, packet_id: i32, buf: &mut ReadBuffer) {
+        match packet_id {
+            _ => {}
+        }
+    }
 }
