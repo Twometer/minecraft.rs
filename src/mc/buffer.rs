@@ -36,6 +36,11 @@ impl WriteBuffer {
         self.write_bytes(&bytes);
     }
 
+    pub fn write_i64(&mut self, value: i64) {
+        let bytes = value.to_be_bytes();
+        self.write_bytes(&bytes);
+    }
+
     pub fn write_string(&mut self, value: &str) {
         self.write_varint(value.len() as i32);
         let bytes = value.as_bytes();
