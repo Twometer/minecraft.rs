@@ -1,0 +1,9 @@
+[package]
+name = "minecraft-rs"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+inflate = "0.4.5"
+log = "0.4.14"
+pretty_env_logger = "0.4.0"
