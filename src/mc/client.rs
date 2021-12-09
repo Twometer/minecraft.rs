@@ -1,6 +1,6 @@
-use std::rc::Weak;
-use std::sync::atomic::AtomicI32;
-use std::sync::{Arc, Mutex};
+use core::time;
+use std::sync::{atomic::AtomicI32, Arc, Mutex};
+use std::time::{Duration, SystemTime};
 use std::{io::Read, io::Result, io::Write, net::TcpStream};
 
 use log::info;
@@ -21,6 +21,7 @@ pub struct MinecraftClient {
     entity_id: i32,
     username: String,
     server: Arc<Mutex<MinecraftServer>>,
+    last_keep_alive_sent: SystemTime,
 }
 
 #[derive(Debug)]
@@ -40,6 +41,7 @@ impl MinecraftClient {
             entity_id: 0,
             username: String::new(),
             server,
+            last_keep_alive_sent: SystemTime::now(),
         }
     }
 
@@ -59,11 +61,25 @@ impl MinecraftClient {
                 );
                 break;
             }
+            self.send_keepalive();
         }
 
         {
             let mut server = self.server.lock().unwrap();
             server.remove_client(&self);
+        }
+    }
+
+    fn send_keepalive(&mut self) {
+        let timeout = SystemTime::now()
+            .duration_since(self.last_keep_alive_sent)
+            .unwrap();
+        if timeout.as_secs() > 10 {
+            self.last_keep_alive_sent = SystemTime::now();
+
+            let mut keepalive = WriteBuffer::new();
+            keepalive.write_varint(69);
+            self.send_packet(0x00, &keepalive);
         }
     }
 
@@ -219,9 +235,9 @@ impl MinecraftClient {
 
                 // Send spawn position
                 let mut spawn_pos = WriteBuffer::new();
-                spawn_pos.write_f64(0.0); // X
+                spawn_pos.write_f64(2.0); // X
                 spawn_pos.write_f64(64.0); // Y
-                spawn_pos.write_f64(0.0); // Z
+                spawn_pos.write_f64(2.0); // Z
                 spawn_pos.write_f32(0.0); // Yaw
                 spawn_pos.write_f32(0.0); // Pitch
                 spawn_pos.write_u8(0); // Flags
@@ -263,7 +279,8 @@ impl MinecraftClient {
         for y in 0..16 {
             for z in 0..16 {
                 for x in 0..16 {
-                    buf.write_u16_le(1 << 4);
+                    let block_id = x + 1;
+                    buf.write_u16_le(block_id << 4);
                 }
             }
         }
