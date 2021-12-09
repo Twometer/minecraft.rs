@@ -92,7 +92,7 @@ impl ReadBuffer {
     }
 
     pub fn read_var_int(&mut self) -> i32 {
-        return read_var_int(&mut self.buf);
+        return read_var_int(&mut self.buf).expect("failed to read var int from buffer");
     }
 
     pub fn read_u8(&mut self) -> u8 {

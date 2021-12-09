@@ -8,13 +8,13 @@ pub use self::buffer::WriteBuffer;
 pub use self::connection::MinecraftConnection;
 
 // Common functions
-use std::io::Read;
+use std::io::{Read, Result};
 
-pub fn read_var_int(source: &mut impl Read) -> i32 {
+pub fn read_var_int(source: &mut impl Read) -> Result<i32> {
     let mut val: i32 = 0;
     let mut buf = [0; 1];
     for i in 0..4 {
-        source.read_exact(&mut buf).expect("failed to read VarInt");
+        source.read_exact(&mut buf)?;
 
         let masked = (buf[0] & 0x7f) as i32;
         val |= masked << i * 7;
@@ -23,7 +23,7 @@ pub fn read_var_int(source: &mut impl Read) -> i32 {
             break;
         }
     }
-    return val;
+    return Ok(val);
 }
 
 pub fn calc_varint_size(mut value: i32) -> usize {

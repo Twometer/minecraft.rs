@@ -1,5 +1,4 @@
-use std::io::Write;
-use std::{io::Read, net::TcpStream};
+use std::{io::Read, io::Result, io::Write, net::TcpStream};
 
 use log::info;
 use log::{debug, trace};
@@ -36,39 +35,46 @@ impl MinecraftConnection {
 
     pub fn receive_loop(&mut self) {
         loop {
-            let packet_len = read_var_int(&mut self.stream);
-            if packet_len <= 0 {
-                debug!("Connection lost to {}", self.stream.peer_addr().unwrap());
+            let result = self.read_packet();
+            if result.is_err() {
+                debug!(
+                    "Connection with {} closed: {}",
+                    self.stream.peer_addr().unwrap(),
+                    result.unwrap_err()
+                );
                 return;
             }
+        }
+    }
 
-            let mut data = vec![0u8; packet_len as usize];
-            self.stream
-                .read_exact(&mut data)
-                .expect("failed to read packet contents");
+    fn read_packet(&mut self) -> Result<()> {
+        let packet_len = read_var_int(&mut self.stream)?;
 
-            let mut buf = ReadBuffer::new(data);
-            if self.compression_threshold > 0 {
-                let size_uncompressed = buf.read_var_int();
-                if size_uncompressed > 0 {
-                    buf.decompress();
-                }
-            }
+        let mut data = vec![0u8; packet_len as usize];
+        self.stream.read_exact(&mut data)?;
 
-            let packet_id = buf.read_var_int();
-            trace!(
-                "Read packet {} with length {} from stream",
-                packet_id,
-                packet_len
-            );
-
-            match self.play_state {
-                PlayState::Handshake => self.handle_handshake_packet(packet_id, &mut buf),
-                PlayState::Status => self.handle_status_packet(packet_id, &mut buf),
-                PlayState::Login => self.handle_login_packet(packet_id, &mut buf),
-                PlayState::Play => self.handle_play_packet(packet_id, &mut buf),
+        let mut buf = ReadBuffer::new(data);
+        if self.compression_threshold > 0 {
+            let size_uncompressed = buf.read_var_int();
+            if size_uncompressed > 0 {
+                buf.decompress();
             }
         }
+
+        let packet_id = buf.read_var_int();
+        trace!(
+            "Read packet {} with length {} from stream",
+            packet_id,
+            packet_len
+        );
+
+        match self.play_state {
+            PlayState::Handshake => self.handle_handshake_packet(packet_id, &mut buf),
+            PlayState::Status => self.handle_status_packet(packet_id, &mut buf),
+            PlayState::Login => self.handle_login_packet(packet_id, &mut buf),
+            PlayState::Play => self.handle_play_packet(packet_id, &mut buf),
+        }
+        Ok(())
     }
 
     fn change_state(&mut self, next_state: i32) {
@@ -78,7 +84,7 @@ impl MinecraftConnection {
             3 => PlayState::Play,
             _ => panic!("Invalid play state {}", next_state),
         };
-        info!("Changed to PlayState::{:?}", self.play_state);
+        debug!("Changed to PlayState::{:?}", self.play_state);
     }
 
     fn send_packet(&mut self, id: i32, payload: &WriteBuffer) {

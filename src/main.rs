@@ -19,12 +19,12 @@ fn main() -> Result<()> {
     pretty_env_logger::init();
 
     let listener = TcpListener::bind("127.0.0.1:25565")?;
-
     for stream in listener.incoming() {
         let stream = stream?;
         thread::spawn(|| {
             handle_client(stream);
         });
     }
+    
     Ok(())
 }
