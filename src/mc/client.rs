@@ -46,11 +46,6 @@ impl MinecraftClient {
     }
 
     pub fn receive_loop(&mut self) {
-        {
-            let mut server = self.server.lock().unwrap();
-            server.add_client(&self);
-        }
-
         loop {
             let result = self.read_packet();
             if result.is_err() {
@@ -62,11 +57,6 @@ impl MinecraftClient {
                 break;
             }
             self.send_keepalive();
-        }
-
-        {
-            let mut server = self.server.lock().unwrap();
-            server.remove_client(&self);
         }
     }
 
@@ -257,9 +247,9 @@ impl MinecraftClient {
                 let chat_obj = json!({ "text": format!("<{}> {}", self.username, chat_message) });
                 response.write_string(chat_obj.to_string().as_str());
                 response.write_u8(0);
-                self.send_packet(0x02, &response);
-                //let srv = self.server.lock().unwrap();
-                //srv.broadcast(0x02, &response);
+                //self.send_packet(0x02, &response);
+                let srv = self.server.lock().unwrap();
+                srv.broadcast(0x02, &response);
             }
             _ => {}
         }

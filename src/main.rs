@@ -13,8 +13,13 @@ use std::{
 fn handle_client(stream: TcpStream, server: Arc<Mutex<MinecraftServer>>) {
     debug!("Accepted connection from {}", stream.peer_addr().unwrap());
 
-    let mut client = MinecraftClient::new(stream, server);
-    client.receive_loop();
+    let client = MinecraftClient::new(stream, server.clone());
+    let client_arc = Arc::new(Mutex::new(client));
+    {
+        let mut server = server.lock().unwrap();
+        server.add_client(client_arc.clone());
+    }
+    client_arc.lock().unwrap().receive_loop();
 }
 
 fn main() -> Result<()> {
