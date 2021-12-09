@@ -1,11 +1,13 @@
 // Import the submodules
 pub mod buffer;
-pub mod connection;
+pub mod client;
+pub mod server;
 
 // Export the public types
 pub use self::buffer::ReadBuffer;
 pub use self::buffer::WriteBuffer;
-pub use self::connection::MinecraftConnection;
+pub use self::client::MinecraftClient;
+pub use self::server::MinecraftServer;
 
 // Common functions
 use std::io::{Read, Result};

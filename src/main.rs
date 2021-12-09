@@ -1,7 +1,7 @@
 mod mc;
 
 use log::debug;
-use mc::MinecraftConnection;
+use mc::{MinecraftClient, MinecraftServer};
 use pretty_env_logger;
 use std::{
     io::Result,
@@ -12,12 +12,14 @@ use std::{
 fn handle_client(stream: TcpStream) {
     debug!("Accepted connection from {}", stream.peer_addr().unwrap());
 
-    MinecraftConnection::new(stream).receive_loop();
+    let mut client = MinecraftClient::new(stream);
+    client.receive_loop();
 }
 
 fn main() -> Result<()> {
     pretty_env_logger::init();
 
+    let mut server = MinecraftServer::new();
     let listener = TcpListener::bind("127.0.0.1:25565")?;
     for stream in listener.incoming() {
         let stream = stream?;
@@ -25,6 +27,6 @@ fn main() -> Result<()> {
             handle_client(stream);
         });
     }
-    
+
     Ok(())
 }

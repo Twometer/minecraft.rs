@@ -1,3 +1,4 @@
+use std::sync::atomic::{AtomicI32};
 use std::{io::Read, io::Result, io::Write, net::TcpStream};
 
 use log::info;
@@ -9,11 +10,13 @@ use crate::mc::ReadBuffer;
 
 use super::{calc_varint_size, WriteBuffer};
 
-pub struct MinecraftConnection {
+static eid_counter: AtomicI32 = AtomicI32::new(0);
+
+pub struct MinecraftClient {
     stream: TcpStream,
     compression_threshold: usize,
     play_state: PlayState,
-    eid_counter: i32,
+    entity_id: i32,
     username: String,
 }
 
@@ -25,13 +28,13 @@ enum PlayState {
     Play,
 }
 
-impl MinecraftConnection {
-    pub fn new(stream: TcpStream) -> MinecraftConnection {
-        MinecraftConnection {
+impl MinecraftClient {
+    pub fn new(stream: TcpStream) -> MinecraftClient {
+        MinecraftClient {
             stream,
             compression_threshold: 0,
             play_state: PlayState::Handshake,
-            eid_counter: 0,
+            entity_id: 0,
             username: String::new(),
         }
     }
@@ -180,17 +183,16 @@ impl MinecraftConnection {
 
                 // Change play state
                 self.change_state(PlayState::Play as i32);
-                self.eid_counter += 1;
 
-                let player_eid = self.eid_counter;
+                self.entity_id = eid_counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 info!(
                     "Player {} logged in with entity id {}",
-                    username, player_eid
+                    username, self.entity_id
                 );
 
                 // Send 'Join Game'
                 let mut join_game = WriteBuffer::new();
-                join_game.write_i32(player_eid);
+                join_game.write_i32(self.entity_id);
                 join_game.write_u8(1); // Gamemode creative
                 join_game.write_u8(0); // Overworld
                 join_game.write_u8(0); // Peaceful
