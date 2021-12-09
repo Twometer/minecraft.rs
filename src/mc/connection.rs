@@ -2,6 +2,7 @@ use std::{io::Read, io::Result, io::Write, net::TcpStream};
 
 use log::info;
 use log::{debug, trace};
+use serde_json::json;
 
 use crate::mc::read_var_int;
 use crate::mc::ReadBuffer;
@@ -13,6 +14,7 @@ pub struct MinecraftConnection {
     compression_threshold: usize,
     play_state: PlayState,
     eid_counter: i32,
+    username: String,
 }
 
 #[derive(Debug)]
@@ -30,6 +32,7 @@ impl MinecraftConnection {
             compression_threshold: 0,
             play_state: PlayState::Handshake,
             eid_counter: 0,
+            username: String::new(),
         }
     }
 
@@ -128,8 +131,21 @@ impl MinecraftConnection {
             0x00 => {
                 // Request
                 let mut response = WriteBuffer::new();
-                let json = r#"{"version":{"name":"1.8.0","protocol":47},"players":{"max":100,"online":0,"sample":[]},"description":{"text":"Hello from the Rustcraft Server"}}"#;
-                response.write_string(json);
+                let status = json!({
+                    "version": {
+                        "name": "1.8.0",
+                        "protocol": 47
+                    },
+                    "players":{
+                        "max": 20,
+                        "online": 0,
+                        "sample": []
+                    },
+                    "description": {
+                        "text": "Hello from §6minecraft.rs"
+                    }
+                });
+                response.write_string(status.to_string().as_str());
                 self.send_packet(0x00, &response)
             }
             0x01 => {
@@ -148,6 +164,7 @@ impl MinecraftConnection {
             0x00 => {
                 // Decode 'Login start'
                 let username = buf.read_string();
+                self.username = username.to_string();
 
                 // Send 'Set compression'
                 let mut set_compression = WriteBuffer::new();
@@ -196,8 +213,18 @@ impl MinecraftConnection {
         }
     }
 
-    fn handle_play_packet(&self, packet_id: i32, buf: &mut ReadBuffer) {
+    fn handle_play_packet(&mut self, packet_id: i32, buf: &mut ReadBuffer) {
         match packet_id {
+            0x01 => {
+                let chat_message = buf.read_string();
+                info!("<{}> {}", self.username, chat_message);
+
+                let mut response = WriteBuffer::new();
+                let chat_obj = json!({ "text": format!("<{}> {}", self.username, chat_message) });
+                response.write_string(chat_obj.to_string().as_str());
+                response.write_u8(0);
+                self.send_packet(0x02, &response);
+            }
             _ => {}
         }
     }
