@@ -41,6 +41,11 @@ impl WriteBuffer {
         self.write_bytes(&bytes);
     }
 
+    pub fn write_u16_le(&mut self, value: u16) {
+        let bytes = value.to_le_bytes();
+        self.write_bytes(&bytes);
+    }
+
     pub fn write_i64(&mut self, value: i64) {
         let bytes = value.to_be_bytes();
         self.write_bytes(&bytes);

@@ -1,4 +1,6 @@
-use std::sync::atomic::{AtomicI32};
+use std::rc::Weak;
+use std::sync::atomic::AtomicI32;
+use std::sync::{Arc, Mutex};
 use std::{io::Read, io::Result, io::Write, net::TcpStream};
 
 use log::info;
@@ -8,7 +10,7 @@ use serde_json::json;
 use crate::mc::read_var_int;
 use crate::mc::ReadBuffer;
 
-use super::{calc_varint_size, WriteBuffer};
+use super::{calc_varint_size, MinecraftServer, WriteBuffer};
 
 static eid_counter: AtomicI32 = AtomicI32::new(0);
 
@@ -18,6 +20,7 @@ pub struct MinecraftClient {
     play_state: PlayState,
     entity_id: i32,
     username: String,
+    server: Arc<Mutex<MinecraftServer>>,
 }
 
 #[derive(Debug)]
@@ -29,17 +32,23 @@ enum PlayState {
 }
 
 impl MinecraftClient {
-    pub fn new(stream: TcpStream) -> MinecraftClient {
+    pub fn new(stream: TcpStream, server: Arc<Mutex<MinecraftServer>>) -> MinecraftClient {
         MinecraftClient {
             stream,
             compression_threshold: 0,
             play_state: PlayState::Handshake,
             entity_id: 0,
             username: String::new(),
+            server,
         }
     }
 
     pub fn receive_loop(&mut self) {
+        {
+            let mut server = self.server.lock().unwrap();
+            server.add_client(&self);
+        }
+
         loop {
             let result = self.read_packet();
             if result.is_err() {
@@ -48,8 +57,13 @@ impl MinecraftClient {
                     self.stream.peer_addr().unwrap(),
                     result.unwrap_err()
                 );
-                return;
+                break;
             }
+        }
+
+        {
+            let mut server = self.server.lock().unwrap();
+            server.remove_client(&self);
         }
     }
 
@@ -93,7 +107,7 @@ impl MinecraftClient {
         debug!("Changed to PlayState::{:?}", self.play_state);
     }
 
-    fn send_packet(&mut self, id: i32, payload: &WriteBuffer) {
+    pub fn send_packet(&mut self, id: i32, payload: &WriteBuffer) {
         let mut packet = WriteBuffer::new();
 
         if self.compression_threshold > 0 {
@@ -201,10 +215,12 @@ impl MinecraftClient {
                 join_game.write_u8(0);
                 self.send_packet(0x01, &join_game);
 
+                self.send_demo_chunk();
+
                 // Send spawn position
                 let mut spawn_pos = WriteBuffer::new();
                 spawn_pos.write_f64(0.0); // X
-                spawn_pos.write_f64(0.0); // Y
+                spawn_pos.write_f64(64.0); // Y
                 spawn_pos.write_f64(0.0); // Z
                 spawn_pos.write_f32(0.0); // Yaw
                 spawn_pos.write_f32(0.0); // Pitch
@@ -226,8 +242,42 @@ impl MinecraftClient {
                 response.write_string(chat_obj.to_string().as_str());
                 response.write_u8(0);
                 self.send_packet(0x02, &response);
+                //let srv = self.server.lock().unwrap();
+                //srv.broadcast(0x02, &response);
             }
             _ => {}
         }
+    }
+
+    fn send_demo_chunk(&mut self) {
+        let mut buf = WriteBuffer::new();
+        buf.write_u8(1); // with skylight
+        buf.write_varint(1); // one chunk
+
+        // chunk meta
+        buf.write_i32(0); // X
+        buf.write_i32(0); // Z
+        buf.write_u16(0b0000000000000001); // chunk column bitmask
+
+        // chunk data
+        for y in 0..16 {
+            for z in 0..16 {
+                for x in 0..16 {
+                    buf.write_u16_le(1 << 4);
+                }
+            }
+        }
+
+        // light data
+        for i in 0..4096 {
+            buf.write_u8(0xFF);
+        }
+
+        // biome data
+        for i in 0..256 {
+            buf.write_u8(2);
+        }
+
+        self.send_packet(0x26, &buf);
     }
 }
