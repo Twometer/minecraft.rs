@@ -1,16 +1,12 @@
-use core::time;
-use std::sync::{atomic::AtomicI32, Arc, Mutex};
-use std::time::{Duration, SystemTime};
-use std::{io::Read, io::Result, io::Write, net::TcpStream};
-
+use super::{calc_varint_size, WriteBuffer};
+use crate::mc::read_var_int;
+use crate::mc::ReadBuffer;
 use log::info;
 use log::{debug, trace};
 use serde_json::json;
-
-use crate::mc::read_var_int;
-use crate::mc::ReadBuffer;
-
-use super::{calc_varint_size, MinecraftServer, WriteBuffer};
+use std::sync::atomic::AtomicI32;
+use std::time::SystemTime;
+use std::{io::Read, io::Result, io::Write, net::TcpStream};
 
 static eid_counter: AtomicI32 = AtomicI32::new(0);
 
@@ -20,7 +16,6 @@ pub struct MinecraftClient {
     play_state: PlayState,
     entity_id: i32,
     username: String,
-    server: Arc<Mutex<MinecraftServer>>,
     last_keep_alive_sent: SystemTime,
 }
 
@@ -33,24 +28,18 @@ enum PlayState {
 }
 
 impl MinecraftClient {
-    pub fn new(stream: TcpStream, server: Arc<Mutex<MinecraftServer>>) -> MinecraftClient {
+    pub fn new(stream: TcpStream) -> MinecraftClient {
         MinecraftClient {
             stream,
             compression_threshold: 0,
             play_state: PlayState::Handshake,
             entity_id: 0,
             username: String::new(),
-            server,
             last_keep_alive_sent: SystemTime::now(),
         }
     }
 
     pub fn receive_loop(&mut self) {
-        {
-            let mut server = self.server.lock().unwrap();
-            server.add_client(&self);
-        }
-
         loop {
             let result = self.read_packet();
             if result.is_err() {
@@ -62,11 +51,6 @@ impl MinecraftClient {
                 break;
             }
             self.send_keepalive();
-        }
-
-        {
-            let mut server = self.server.lock().unwrap();
-            server.remove_client(&self);
         }
     }
 

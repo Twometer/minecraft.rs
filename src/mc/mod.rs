@@ -1,6 +1,8 @@
 // Import the submodules
 pub mod buffer;
 pub mod client;
+pub mod codec;
+pub mod proto;
 pub mod server;
 
 // Export the public types
@@ -37,7 +39,7 @@ pub fn calc_varint_size(mut value: i32) -> usize {
             break;
         }
     }
-    return size;
+    size
 }
 
 pub fn block_pos_to_idx(x: u32, y: u32, z: u32) -> u32 {
