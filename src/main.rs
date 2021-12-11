@@ -1,36 +1,40 @@
 mod mc;
 
-use log::debug;
-use mc::{MinecraftClient, MinecraftServer};
-use pretty_env_logger;
-use std::{
-    io::Result,
+use log::{debug, error, info};
+use tokio::{
+    io::AsyncReadExt,
     net::{TcpListener, TcpStream},
-    sync::{Arc, Mutex},
-    thread,
 };
 
-fn handle_client(stream: TcpStream, server: Arc<Mutex<MinecraftServer>>) {
-    debug!("Accepted connection from {}", stream.peer_addr().unwrap());
+#[tokio::main]
+async fn main() -> std::io::Result<()> {
+    pretty_env_logger::init();
+    info!("Starting server...");
 
-    let mut client = MinecraftClient::new(stream, server);
-    client.receive_loop();
+    let listener = TcpListener::bind("127.0.0.1:25565").await?;
+    info!("Listener bound and ready");
+
+    loop {
+        let (stream, _) = listener.accept().await?;
+        handle_client(stream);
+    }
 }
 
-fn main() -> Result<()> {
-    pretty_env_logger::init();
+fn handle_client(mut stream: TcpStream) {
+    tokio::spawn(async move {
+        let mut buf = [0u8; 1024];
 
-    let server = MinecraftServer::new();
-    let shared_server = Arc::new(Mutex::new(server));
+        loop {
+            let n = match stream.read(&mut buf).await {
+                Ok(n) if n == 0 => return,
+                Ok(n) => n,
+                Err(e) => {
+                    error!("Client disconnected: {}", e);
+                    return;
+                }
+            };
 
-    let listener = TcpListener::bind("127.0.0.1:25565")?;
-    for stream in listener.incoming() {
-        let stream = stream?;
-        let thread_server = shared_server.clone();
-        thread::spawn(move || {
-            handle_client(stream, thread_server);
-        });
-    }
-
-    Ok(())
+            debug!("Read {} bytes", n);
+        }
+    });
 }
