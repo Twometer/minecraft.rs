@@ -2,7 +2,7 @@ use std::io;
 
 use crate::mc::proto::{Packet, PlayState};
 use bytes::{Buf, BufMut, BytesMut};
-use log::trace;
+use log::{debug, trace};
 use tokio_util::codec::{Decoder, Encoder};
 
 pub trait MinecraftBufExt {
@@ -107,12 +107,12 @@ impl MinecraftCodec {
     }
 
     pub fn change_state(&mut self, next_state: PlayState) {
-        trace!("Changing to state {:?}", next_state);
+        debug!("Changing to state {:?}", next_state);
         self.current_state = next_state;
     }
 
     pub fn change_compression_threshold(&mut self, compression_threshold: usize) {
-        trace!(
+        debug!(
             "Changing compression threshold to {}",
             compression_threshold
         );
