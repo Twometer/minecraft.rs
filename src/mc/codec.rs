@@ -6,11 +6,22 @@ use log::{debug, trace};
 use tokio_util::codec::Decoder;
 
 pub trait MinecraftBufExt {
+    fn has_complete_var_int(&mut self) -> bool;
     fn get_var_int(&mut self) -> i32;
     fn get_string(&mut self) -> String;
 }
 
 impl MinecraftBufExt for BytesMut {
+    fn has_complete_var_int(&mut self) -> bool {
+        for i in 0..std::cmp::min(4, self.len()) {
+            let byte = self[i];
+            if byte & 0x80 == 0 {
+                return true;
+            }
+        }
+        false
+    }
+
     fn get_var_int(&mut self) -> i32 {
         let mut result = 0i32;
         for i in 0..4 {
@@ -110,9 +121,10 @@ impl Decoder for MinecraftCodec {
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
         match self.decoder_state {
             DecoderState::Header => {
-                if src.len() < 4 {
+                if !src.has_complete_var_int() {
                     return Ok(None);
                 }
+
                 let packet_len = src.get_var_int() as usize;
                 if packet_len > 1024 * 1024 * 1024 {
                     return Err(io::Error::new(
@@ -122,7 +134,7 @@ impl Decoder for MinecraftCodec {
                 }
 
                 self.decoder_state = DecoderState::Body(packet_len);
-                Ok(None)
+                self.decode(src)
             }
             DecoderState::Body(packet_len) => {
                 if src.remaining() < packet_len {
@@ -132,7 +144,7 @@ impl Decoder for MinecraftCodec {
 
                 let mut payload = src.split_to(packet_len);
                 if self.compression_threshold > 0 {
-                    let size_uncompressed = payload.get_var_int();
+                    let _size_uncompressed = payload.get_var_int();
                     // TODO: Decompress here
                 }
 
