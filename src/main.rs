@@ -1,8 +1,10 @@
 mod mc;
 
+use std::time::SystemTime;
+
 use crate::mc::codec::MinecraftCodec;
 use futures::{SinkExt, StreamExt};
-use log::{debug, error, info};
+use log::{error, info, trace};
 use serde_json::json;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_util::codec::Framed;
@@ -24,15 +26,16 @@ async fn main() -> std::io::Result<()> {
 // TODO: Clean this up
 fn handle_client(stream: TcpStream) {
     tokio::spawn(async move {
-        debug!("Client {:?} connected", stream.peer_addr().unwrap());
+        info!("Client {:?} connected", stream.peer_addr().unwrap());
 
         let codec = MinecraftCodec::new();
         let mut framed = Framed::new(stream, codec);
+        let mut last_keep_alive = SystemTime::now();
 
         while let Some(f) = framed.next().await {
             match f {
                 Ok(packet) => {
-                    debug!("Received {:?}", packet);
+                    trace!("Received {:?}", packet);
 
                     match packet {
                         mc::proto::Packet::C00Handshake {
@@ -41,7 +44,7 @@ fn handle_client(stream: TcpStream) {
                             ..
                         } => {
                             if protocol_version != 47 {
-                                panic!("Unsupported protocol");
+                                panic!("Unsupported protocol version");
                             }
 
                             framed.codec_mut().change_state(next_state);
@@ -89,14 +92,58 @@ fn handle_client(stream: TcpStream) {
                                 .await
                                 .unwrap();
                             framed.codec_mut().change_state(mc::proto::PlayState::Play);
+
+                            framed
+                                .send(mc::proto::Packet::S01JoinGame {
+                                    entity_id: 0,
+                                    gamemode: 1,
+                                    dimension: 0,
+                                    difficulty: 0,
+                                    player_list_size: 4,
+                                    world_type: "default".to_string(),
+                                    reduced_debug_info: false,
+                                })
+                                .await
+                                .unwrap();
+
+                            // TODO Transmit the actual world here
+                            framed
+                                .send(mc::proto::Packet::S26MapChunkBulk {})
+                                .await
+                                .unwrap();
+
+                            framed
+                                .send(mc::proto::Packet::S08SetPlayerPosition {
+                                    x: 0.0,
+                                    y: 64.0,
+                                    z: 0.0,
+                                    yaw: 0.0,
+                                    pitch: 0.0,
+                                    flags: 0,
+                                })
+                                .await
+                                .unwrap();
+                        }
+                        mc::proto::Packet::C01ChatMessage { message } => {
+                            info!("Chat message: {}", message);
                         }
                         _ => {}
                     }
                 }
                 Err(e) => {
-                    error!("Client error: {}", e);
+                    error!("Client disconnect: {}", e);
                     break;
                 }
+            }
+
+            let keep_alive_timeout = SystemTime::now().duration_since(last_keep_alive).unwrap();
+            if keep_alive_timeout.as_secs() > 10 {
+                framed
+                    .send(mc::proto::Packet::S00KeepAlive { timestamp: 69 })
+                    .await
+                    .unwrap();
+
+                last_keep_alive = SystemTime::now();
             }
         }
     });

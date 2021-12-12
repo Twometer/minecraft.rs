@@ -159,6 +159,9 @@ impl MinecraftCodec {
             0x01 => Some(Packet::C01ChatMessage {
                 message: buf.get_string(),
             }),
+            0x03 => Some(Packet::C03Player {
+                on_ground: buf.get_bool(),
+            }),
             _ => None,
         }
     }
@@ -204,6 +207,37 @@ impl MinecraftCodec {
                 buf.put_f32(yaw);
                 buf.put_f32(pitch);
                 buf.put_u8(flags);
+            }
+            Packet::S26MapChunkBulk { .. } => {
+                // TODO: Actual world data instead of demo chunk
+
+                buf.put_bool(true); // skylight
+                buf.put_var_int(1); // num chunks
+
+                // chunk meta array (only one here)
+                buf.put_i32(0); // X
+                buf.put_i32(0); // Z
+                buf.put_u16(0b0000000000000001); // chunk column bitmask (only lowest section is active)
+
+                // chunk data
+                for _y in 0..16 {
+                    for _z in 0..16 {
+                        for x in 0..16 {
+                            let block_id = x + 1;
+                            buf.put_u16_le(block_id << 4);
+                        }
+                    }
+                }
+
+                // light data
+                for _ in 0..4096 {
+                    buf.put_u8(0xFF); // full light
+                }
+
+                // biome data
+                for _ in 0..256 {
+                    buf.put_u8(2); // desert biome
+                }
             }
             _ => panic!("Invalid packet direction!"),
         }

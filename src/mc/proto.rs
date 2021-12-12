@@ -59,6 +59,9 @@ pub enum Packet {
     C01ChatMessage {
         message: String,
     },
+    C03Player {
+        on_ground: bool,
+    },
     S00KeepAlive {
         timestamp: i32,
     },
@@ -79,6 +82,7 @@ pub enum Packet {
         pitch: f32,
         flags: u8,
     },
+    S26MapChunkBulk {/* TODO */},
 }
 
 impl Packet {
@@ -87,6 +91,7 @@ impl Packet {
             Packet::C00Handshake { .. } => 0x00,
             Packet::C00StatusRequest { .. } => 0x00,
             Packet::C01StatusPing { .. } => 0x01,
+            Packet::C03Player { .. } => 0x03,
             Packet::S00StatusResponse { .. } => 0x00,
             Packet::S01StatusPong { .. } => 0x01,
             Packet::C00LoginStart { .. } => 0x00,
@@ -97,6 +102,7 @@ impl Packet {
             Packet::S00KeepAlive { .. } => 0x00,
             Packet::S01JoinGame { .. } => 0x01,
             Packet::S08SetPlayerPosition { .. } => 0x08,
+            Packet::S26MapChunkBulk { .. } => 0x26,
         }
     }
 }
