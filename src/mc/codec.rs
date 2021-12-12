@@ -1,9 +1,10 @@
 use std::io;
 
-use crate::mc::proto::{Packet, PlayState};
 use bytes::{Buf, BufMut, BytesMut};
 use log::{debug, trace};
 use tokio_util::codec::{Decoder, Encoder};
+
+use crate::mc::proto::{Packet, PlayState};
 
 pub trait MinecraftBufExt {
     fn has_complete_var_int(&mut self) -> bool;

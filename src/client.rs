@@ -1,37 +1,49 @@
-use std::time::Duration;
+use std::{ops::Add, time::Duration};
 
-use crate::mc::{codec::MinecraftCodec, proto::Packet, proto::PlayState};
 use futures::{SinkExt, StreamExt};
 use log::{error, info, trace};
 use serde_json::json;
-use tokio::{net::TcpStream, select, sync::mpsc, time};
+use tokio::{
+    net::TcpStream,
+    select,
+    sync::mpsc,
+    time::{self, Instant},
+};
 use tokio_util::codec::Framed;
 
+use crate::mc::{codec::MinecraftCodec, proto::Packet, proto::PlayState};
+
 pub struct ClientHandler {
-    stream: Framed<TcpStream, MinecraftCodec>,
+    in_stream: Framed<TcpStream, MinecraftCodec>,
+    out_stream: mpsc::Receiver<Packet>,
     broadcast: mpsc::Sender<Packet>,
-    transmit: mpsc::Receiver<Packet>,
 }
 
 impl ClientHandler {
     pub fn new(
-        stream: Framed<TcpStream, MinecraftCodec>,
+        in_stream: Framed<TcpStream, MinecraftCodec>,
+        out_stream: mpsc::Receiver<Packet>,
         broadcast: mpsc::Sender<Packet>,
-        transmit: mpsc::Receiver<Packet>,
     ) -> ClientHandler {
         ClientHandler {
-            stream,
+            in_stream,
+            out_stream,
             broadcast,
-            transmit,
         }
     }
 
     pub async fn handle_loop(&mut self) {
-        let mut keep_alive_interval = time::interval(Duration::from_secs(10));
+        let mut keep_alive_interval = time::interval_at(
+            Instant::now().add(Duration::from_secs(5)),
+            Duration::from_secs(10),
+        );
 
         loop {
             select! {
-                packet_in = self.stream.next() => {
+                packet_in = self.in_stream.next() => {
+                    if packet_in.is_none() {
+                        break;
+                    }
 
                     match packet_in.unwrap() {
                         Ok(packet) => {
@@ -46,11 +58,15 @@ impl ClientHandler {
                     }
 
                 },
-                packet_out = self.transmit.recv() => {
-                    self.stream.send(packet_out.unwrap()).await.expect("Client send failed");
+                packet_out = self.out_stream.recv() => {
+                    if packet_out.is_none() {
+                        break;
+                    }
+
+                    self.in_stream.send(packet_out.unwrap()).await.expect("Client send failed");
                 }
                 _ = keep_alive_interval.tick() => {
-                    self.stream
+                    self.in_stream
                         .send(Packet::S00KeepAlive { timestamp: 69 })
                         .await
                         .expect("Client keep-alive failed");
@@ -72,7 +88,7 @@ impl ClientHandler {
                     panic!("Unsupported protocol version");
                 }
 
-                self.stream.codec_mut().change_state(next_state);
+                self.in_stream.codec_mut().change_state(next_state);
             }
 
             Packet::C00StatusRequest => {
@@ -90,33 +106,35 @@ impl ClientHandler {
                         "text": "Hello from §6minecraft.rs §rwith §aT§bo§ck§di§eo"
                     }
                 });
-                self.stream
+                self.in_stream
                     .send(Packet::S00StatusResponse {
                         status: status.to_string(),
                     })
                     .await?;
             }
             Packet::C01StatusPing { timestamp } => {
-                self.stream
+                self.in_stream
                     .send(Packet::S01StatusPong { timestamp })
                     .await?;
             }
 
             Packet::C00LoginStart { username } => {
-                self.stream
+                self.in_stream
                     .send(Packet::S03LoginCompression { threshold: 8192 })
                     .await?;
-                self.stream.codec_mut().change_compression_threshold(8192);
+                self.in_stream
+                    .codec_mut()
+                    .change_compression_threshold(8192);
 
-                self.stream
+                self.in_stream
                     .send(Packet::S02LoginSuccess {
                         uuid: "3b9f9997-d547-4f70-a37c-8fffbe706002".to_string(),
                         username,
                     })
                     .await?;
-                self.stream.codec_mut().change_state(PlayState::Play);
+                self.in_stream.codec_mut().change_state(PlayState::Play);
 
-                self.stream
+                self.in_stream
                     .send(Packet::S01JoinGame {
                         entity_id: 0,
                         gamemode: 1,
@@ -129,9 +147,9 @@ impl ClientHandler {
                     .await?;
 
                 // TODO Transmit the actual world here
-                self.stream.send(Packet::S26MapChunkBulk {}).await?;
+                self.in_stream.send(Packet::S26MapChunkBulk {}).await?;
 
-                self.stream
+                self.in_stream
                     .send(Packet::S08SetPlayerPosition {
                         x: 0.0,
                         y: 64.0,
