@@ -80,3 +80,23 @@ pub enum Packet {
         flags: u8,
     },
 }
+
+impl Packet {
+    pub fn id(&self) -> i32 {
+        match self {
+            Packet::C00Handshake { .. } => 0x00,
+            Packet::C00StatusRequest { .. } => 0x00,
+            Packet::C01StatusPing { .. } => 0x01,
+            Packet::S00StatusResponse { .. } => 0x00,
+            Packet::S01StatusPong { .. } => 0x01,
+            Packet::C00LoginStart { .. } => 0x00,
+            Packet::S02LoginSuccess { .. } => 0x02,
+            Packet::S03LoginCompression { .. } => 0x03,
+            Packet::C00KeepAlive { .. } => 0x00,
+            Packet::C01ChatMessage { .. } => 0x01,
+            Packet::S00KeepAlive { .. } => 0x00,
+            Packet::S01JoinGame { .. } => 0x01,
+            Packet::S08SetPlayerPosition { .. } => 0x08,
+        }
+    }
+}

@@ -1,14 +1,18 @@
 use std::io;
 
 use crate::mc::proto::{Packet, PlayState};
-use bytes::{Buf, BytesMut};
-use log::{debug, trace};
-use tokio_util::codec::Decoder;
+use bytes::{Buf, BufMut, BytesMut};
+use log::trace;
+use tokio_util::codec::{Decoder, Encoder};
 
 pub trait MinecraftBufExt {
     fn has_complete_var_int(&mut self) -> bool;
     fn get_var_int(&mut self) -> i32;
     fn get_string(&mut self) -> String;
+    fn get_bool(&mut self) -> bool;
+    fn put_var_int(&mut self, value: i32);
+    fn put_string(&mut self, value: &str);
+    fn put_bool(&mut self, value: bool);
 }
 
 impl MinecraftBufExt for BytesMut {
@@ -41,6 +45,45 @@ impl MinecraftBufExt for BytesMut {
         let str_data = self.split_to(str_len as usize);
         return String::from_utf8(str_data.to_vec()).expect("invalid string received");
     }
+
+    fn get_bool(&mut self) -> bool {
+        self.get_u8() != 0
+    }
+
+    fn put_var_int(&mut self, mut value: i32) {
+        loop {
+            let mut cur_byte = (value & 0x7f) as u8;
+            value >>= 7;
+            if value != 0 {
+                cur_byte |= 0x80;
+            }
+            self.put_u8(cur_byte);
+            if value == 0 {
+                break;
+            }
+        }
+    }
+
+    fn put_string(&mut self, value: &str) {
+        self.put_var_int(value.len() as i32);
+        self.extend_from_slice(value.as_bytes());
+    }
+
+    fn put_bool(&mut self, value: bool) {
+        self.put_u8(if value { 1 } else { 0 });
+    }
+}
+
+fn calc_varint_size(mut value: i32) -> usize {
+    let mut size: usize = 0;
+    loop {
+        value >>= 7;
+        size += 1;
+        if value == 0 {
+            break;
+        }
+    }
+    size
 }
 
 enum DecoderState {
@@ -64,8 +107,16 @@ impl MinecraftCodec {
     }
 
     pub fn change_state(&mut self, next_state: PlayState) {
-        debug!("Changing to state {:?}", next_state);
+        trace!("Changing to state {:?}", next_state);
         self.current_state = next_state;
+    }
+
+    pub fn change_compression_threshold(&mut self, compression_threshold: usize) {
+        trace!(
+            "Changing compression threshold to {}",
+            compression_threshold
+        );
+        self.compression_threshold = compression_threshold;
     }
 
     fn decode_handshake_packet(&self, packet_id: i32, buf: &mut BytesMut) -> Option<Packet> {
@@ -111,6 +162,52 @@ impl MinecraftCodec {
             _ => None,
         }
     }
+
+    fn encode_packet(&self, packet: Packet, buf: &mut BytesMut) {
+        match packet {
+            Packet::S00StatusResponse { status } => buf.put_string(status.as_str()),
+            Packet::S01StatusPong { timestamp } => buf.put_i64(timestamp),
+            Packet::S02LoginSuccess { uuid, username } => {
+                buf.put_string(uuid.as_str());
+                buf.put_string(username.as_str());
+            }
+            Packet::S03LoginCompression { threshold } => buf.put_var_int(threshold),
+            Packet::S00KeepAlive { timestamp } => buf.put_var_int(timestamp),
+            Packet::S01JoinGame {
+                entity_id,
+                gamemode,
+                dimension,
+                difficulty,
+                player_list_size,
+                world_type,
+                reduced_debug_info,
+            } => {
+                buf.put_i32(entity_id);
+                buf.put_u8(gamemode);
+                buf.put_u8(dimension);
+                buf.put_u8(difficulty);
+                buf.put_u8(player_list_size);
+                buf.put_string(world_type.as_str());
+                buf.put_bool(reduced_debug_info);
+            }
+            Packet::S08SetPlayerPosition {
+                x,
+                y,
+                z,
+                yaw,
+                pitch,
+                flags,
+            } => {
+                buf.put_f64(x);
+                buf.put_f64(y);
+                buf.put_f64(z);
+                buf.put_f32(yaw);
+                buf.put_f32(pitch);
+                buf.put_u8(flags);
+            }
+            _ => panic!("Invalid packet direction!"),
+        }
+    }
 }
 
 impl Decoder for MinecraftCodec {
@@ -133,6 +230,7 @@ impl Decoder for MinecraftCodec {
                     ));
                 }
 
+                src.reserve(packet_len);
                 self.decoder_state = DecoderState::Body(packet_len);
                 self.decode(src)
             }
@@ -159,5 +257,31 @@ impl Decoder for MinecraftCodec {
                 })
             }
         }
+    }
+}
+
+impl Encoder<Packet> for MinecraftCodec {
+    type Error = io::Error;
+
+    fn encode(&mut self, item: Packet, dst: &mut BytesMut) -> Result<(), Self::Error> {
+        let packet_id: i32 = item.id();
+
+        let mut packet_buf = BytesMut::new();
+        self.encode_packet(item, &mut packet_buf);
+
+        if self.compression_threshold > 0 {
+            let packet_len = calc_varint_size(packet_id) + calc_varint_size(0) + packet_buf.len();
+            dst.put_var_int(packet_len as i32);
+            dst.put_var_int(0);
+            // TODO: Compresssion
+        } else {
+            let packet_len = calc_varint_size(packet_id) + packet_buf.len();
+            dst.put_var_int(packet_len as i32);
+        }
+
+        dst.put_var_int(packet_id);
+        dst.extend_from_slice(&packet_buf[..]);
+
+        Ok(())
     }
 }
