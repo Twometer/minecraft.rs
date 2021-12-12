@@ -1,4 +1,4 @@
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum PlayState {
     Handshake,
     Status,
@@ -18,7 +18,7 @@ impl TryFrom<i32> for PlayState {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Packet {
     // State::Handshake
     C00Handshake {
@@ -93,6 +93,10 @@ pub enum Packet {
         world_type: String,
         reduced_debug_info: bool,
     },
+    S02ChatMessage {
+        json_data: String,
+        position: u8,
+    },
     S08SetPlayerPosition {
         x: f64,
         y: f64,
@@ -126,6 +130,7 @@ impl Packet {
             Packet::C06PlayerPosRot { .. } => 0x06,
             Packet::S00KeepAlive { .. } => 0x00,
             Packet::S01JoinGame { .. } => 0x01,
+            Packet::S02ChatMessage { .. } => 0x02,
             Packet::S08SetPlayerPosition { .. } => 0x08,
             Packet::S26MapChunkBulk { .. } => 0x26,
         }

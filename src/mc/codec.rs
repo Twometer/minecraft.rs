@@ -212,6 +212,13 @@ impl MinecraftCodec {
                 buf.put_string(world_type.as_str());
                 buf.put_bool(reduced_debug_info);
             }
+            Packet::S02ChatMessage {
+                json_data,
+                position,
+            } => {
+                buf.put_string(&json_data);
+                buf.put_u8(position);
+            }
             Packet::S08SetPlayerPosition {
                 x,
                 y,
