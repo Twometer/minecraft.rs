@@ -162,6 +162,25 @@ impl MinecraftCodec {
             0x03 => Some(Packet::C03Player {
                 on_ground: buf.get_bool(),
             }),
+            0x04 => Some(Packet::C04PlayerPos {
+                x: buf.get_f64(),
+                y: buf.get_f64(),
+                z: buf.get_f64(),
+                on_ground: buf.get_bool(),
+            }),
+            0x05 => Some(Packet::C05PlayerRot {
+                yaw: buf.get_f32(),
+                pitch: buf.get_f32(),
+                on_ground: buf.get_bool(),
+            }),
+            0x06 => Some(Packet::C06PlayerPosRot {
+                x: buf.get_f64(),
+                y: buf.get_f64(),
+                z: buf.get_f64(),
+                yaw: buf.get_f32(),
+                pitch: buf.get_f32(),
+                on_ground: buf.get_bool(),
+            }),
             _ => None,
         }
     }
