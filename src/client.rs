@@ -73,6 +73,9 @@ impl ClientHandler {
                 }
             }
         }
+
+        self.in_stream.close().await.unwrap();
+        self.out_stream.close();
     }
 
     async fn handle_packet(&mut self, packet: Packet) -> std::io::Result<()> {
