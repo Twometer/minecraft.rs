@@ -1,6 +1,7 @@
 mod broker;
 mod client;
 mod mc;
+mod utils;
 
 use log::{debug, info};
 use tokio::net::{TcpListener, TcpStream};

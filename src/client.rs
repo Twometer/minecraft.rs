@@ -11,12 +11,17 @@ use tokio::{
 };
 use tokio_util::codec::Framed;
 
-use crate::mc::{codec::MinecraftCodec, proto::Packet, proto::PlayState};
+use crate::{
+    mc::{codec::MinecraftCodec, proto::Packet, proto::PlayState},
+    utils::broadcast_chat,
+};
 
 pub struct ClientHandler {
     in_stream: Framed<TcpStream, MinecraftCodec>,
     out_stream: mpsc::Receiver<Packet>,
     broadcast: mpsc::Sender<Packet>,
+    entity_id: i32,
+    username: String,
 }
 
 impl ClientHandler {
@@ -29,6 +34,8 @@ impl ClientHandler {
             in_stream,
             out_stream,
             broadcast,
+            entity_id: 0,
+            username: String::new(),
         }
     }
 
@@ -122,6 +129,9 @@ impl ClientHandler {
             }
 
             Packet::C00LoginStart { username } => {
+                self.username = username;
+
+                // Enable compression
                 self.in_stream
                     .send(Packet::S03LoginCompression { threshold: 8192 })
                     .await?;
@@ -129,17 +139,19 @@ impl ClientHandler {
                     .codec_mut()
                     .change_compression_threshold(8192);
 
+                // Enter play state
                 self.in_stream
                     .send(Packet::S02LoginSuccess {
                         uuid: "3b9f9997-d547-4f70-a37c-8fffbe706002".to_string(),
-                        username,
+                        username: self.username.clone(),
                     })
                     .await?;
                 self.in_stream.codec_mut().change_state(PlayState::Play);
 
+                // Complete login sequence
                 self.in_stream
                     .send(Packet::S01JoinGame {
-                        entity_id: 0,
+                        entity_id: self.entity_id,
                         gamemode: 1,
                         dimension: 0,
                         difficulty: 0,
@@ -162,16 +174,22 @@ impl ClientHandler {
                         flags: 0,
                     })
                     .await?;
+
+                // Announce login
+                info!(
+                    "{} logged in with entity id {}",
+                    self.username, self.entity_id
+                );
+                broadcast_chat(
+                    &mut self.broadcast,
+                    format!("§e{} joined the game", self.username),
+                )
+                .await;
             }
             Packet::C01ChatMessage { message } => {
-                self.broadcast
-                    .send(Packet::S02ChatMessage {
-                        json_data: json!({ "text": message }).to_string(),
-                        position: 0,
-                    })
-                    .await
-                    .unwrap();
-                info!("Chat message: {}", message);
+                let prepared_message = format!("§b{}§r: {}", self.username, message);
+                info!("Chat message: {}", prepared_message);
+                broadcast_chat(&mut self.broadcast, prepared_message).await;
             }
 
             _ => {
