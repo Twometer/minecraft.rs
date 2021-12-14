@@ -94,7 +94,7 @@ impl Chunk {
     }
 }
 
-type MutexChunkRef = Arc<Mutex<Chunk>>;
+pub type MutexChunkRef = Arc<Mutex<Chunk>>;
 
 pub struct World {
     chunks: DashMap<ChunkPos, MutexChunkRef>,

@@ -13,9 +13,13 @@ impl WorldGenerator {
 
     pub fn generate(&self) {
         for y in 0..64 {
-            for z in 0..320 {
-                for x in 0..320 {
-                    self.world.set_block(x, y, z, block_state!(1, 0));
+            for z in -176..=176 {
+                for x in -176..=176 {
+                    if y == 63 {
+                        self.world.set_block(x, y, z, block_state!(2, 0));
+                    } else {
+                        self.world.set_block(x, y, z, block_state!(1, 0));
+                    }
                 }
             }
         }

@@ -14,7 +14,7 @@ use tokio_util::codec::Framed;
 use crate::{
     mc::{codec::MinecraftCodec, proto::Packet, proto::PlayState},
     utils::broadcast_chat,
-    world::{Chunk, ChunkPos, World},
+    world::{Chunk, ChunkPos, MutexChunkRef, World},
 };
 
 pub struct ClientHandler {
@@ -164,22 +164,7 @@ impl ClientHandler {
                     .await?;
 
                 // Transmit world
-                let mut transmit_chunks = Vec::<Chunk>::new();
-                for z in 0..4 {
-                    for x in 0..4 {
-                        let chunk_opt = self.world.get_chunk(ChunkPos::new(x, z));
-                        if chunk_opt.is_some() {
-                            let chunk = chunk_opt.unwrap().lock().unwrap().clone();
-                            transmit_chunks.push(chunk);
-                        }
-                    }
-                }
-                self.in_stream
-                    .send(Packet::S26MapChunkBulk {
-                        skylight: true,
-                        chunks: transmit_chunks,
-                    })
-                    .await?;
+                self.send_world(-10, -10, 10, 10).await?;
 
                 // Spawn playef into world
                 self.in_stream
@@ -213,6 +198,39 @@ impl ClientHandler {
             _ => {
                 trace!("Received unhandled packet: {:?}", packet);
             }
+        }
+
+        Ok(())
+    }
+
+    async fn send_world(&mut self, x0: i32, z0: i32, x1: i32, z1: i32) -> std::io::Result<()> {
+        let mut chunk_refs = Vec::<MutexChunkRef>::new();
+
+        // Collect chunks to be sent
+        for z in z0..=z1 {
+            for x in x0..=x1 {
+                let chunk_opt = self.world.get_chunk(ChunkPos::new(x, z));
+                if chunk_opt.is_some() {
+                    chunk_refs.push(chunk_opt.unwrap());
+                }
+            }
+        }
+
+        // Split into packets
+        let chunks_per_packet = 10;
+
+        for subslice in chunk_refs.chunks(chunks_per_packet) {
+            let mut transmit_chunks = Vec::<Chunk>::new();
+            for chunk_ref in subslice {
+                transmit_chunks.push(chunk_ref.lock().unwrap().clone())
+            }
+
+            self.in_stream
+                .send(Packet::S26MapChunkBulk {
+                    skylight: true,
+                    chunks: transmit_chunks,
+                })
+                .await?;
         }
 
         Ok(())
