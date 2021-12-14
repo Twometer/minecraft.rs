@@ -133,11 +133,9 @@ impl ClientHandler {
 
                 // Enable compression
                 self.in_stream
-                    .send(Packet::S03LoginCompression { threshold: 8192 })
+                    .send(Packet::S03LoginCompression { threshold: 256 })
                     .await?;
-                self.in_stream
-                    .codec_mut()
-                    .change_compression_threshold(8192);
+                self.in_stream.codec_mut().change_compression_threshold(256);
 
                 // Enter play state
                 self.in_stream

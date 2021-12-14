@@ -4,7 +4,10 @@ use bytes::{Buf, BufMut, BytesMut};
 use log::{debug, trace};
 use tokio_util::codec::{Decoder, Encoder};
 
-use crate::mc::proto::{Packet, PlayState};
+use crate::mc::{
+    proto::{Packet, PlayState},
+    zlib,
+};
 
 pub trait MinecraftBufExt {
     fn has_complete_var_int(&mut self) -> bool;
@@ -75,7 +78,7 @@ impl MinecraftBufExt for BytesMut {
     }
 }
 
-fn calc_varint_size(mut value: i32) -> usize {
+fn calc_var_int_size(mut value: i32) -> usize {
     let mut size: usize = 0;
     loop {
         value >>= 7;
@@ -303,8 +306,10 @@ impl Decoder for MinecraftCodec {
 
                 let mut payload = src.split_to(packet_len);
                 if self.compression_threshold > 0 {
-                    let _size_uncompressed = payload.get_var_int();
-                    // TODO: Decompress here
+                    let size_uncompressed = payload.get_var_int();
+                    if size_uncompressed > 0 {
+                        payload = zlib::decompress(&payload[..]);
+                    }
                 }
 
                 let packet_id = payload.get_var_int();
@@ -328,20 +333,28 @@ impl Encoder<Packet> for MinecraftCodec {
         let packet_id: i32 = item.id();
 
         let mut packet_buf = BytesMut::new();
+        packet_buf.put_var_int(packet_id);
         self.encode_packet(item, &mut packet_buf);
 
         if self.compression_threshold > 0 {
-            let packet_len = calc_varint_size(packet_id) + calc_varint_size(0) + packet_buf.len();
-            dst.put_var_int(packet_len as i32);
-            dst.put_var_int(0);
-            // TODO: Compresssion
-        } else {
-            let packet_len = calc_varint_size(packet_id) + packet_buf.len();
-            dst.put_var_int(packet_len as i32);
-        }
+            if packet_buf.len() > self.compression_threshold {
+                let packet_buf_compressed = zlib::compress(&packet_buf[..]);
 
-        dst.put_var_int(packet_id);
-        dst.extend_from_slice(&packet_buf[..]);
+                let data_len = packet_buf.len() as i32;
+                let packet_len = (calc_var_int_size(data_len) + packet_buf_compressed.len()) as i32;
+
+                dst.put_var_int(packet_len);
+                dst.put_var_int(data_len);
+                dst.extend_from_slice(&packet_buf_compressed[..]);
+            } else {
+                dst.put_var_int(packet_buf.len() as i32 + 1);
+                dst.put_var_int(0);
+                dst.extend_from_slice(&packet_buf[..]);
+            }
+        } else {
+            dst.put_var_int(packet_buf.len() as i32);
+            dst.extend_from_slice(&packet_buf[..]);
+        }
 
         Ok(())
     }
