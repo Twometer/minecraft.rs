@@ -12,6 +12,7 @@ use tokio_util::codec::Framed;
 use crate::broker::PacketBroker;
 use crate::client::ClientHandler;
 use crate::mc::{codec::MinecraftCodec, proto::Packet};
+use crate::world::{gen::WorldGenerator, World};
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
@@ -21,8 +22,13 @@ async fn main() -> std::io::Result<()> {
     let listener = TcpListener::bind("127.0.0.1:25565").await?;
     info!("Listener bound and ready");
 
-    let mut broker = PacketBroker::new();
+    info!("Preparing spawn region...");
+    let mut world = World::new();
+    let mut gen = WorldGenerator::new(&mut world);
+    gen.generate();
+    info!("Done generating spawn region");
 
+    let mut broker = PacketBroker::new();
     loop {
         let (stream, _) = listener.accept().await?;
         handle_client(stream, broker.new_unicast().await, broker.new_broadcast());
