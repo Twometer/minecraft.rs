@@ -1,4 +1,4 @@
-use crate::world::Chunk;
+use crate::world::{BlockPos, Chunk};
 
 #[derive(Debug, Clone)]
 pub enum PlayState {
@@ -83,6 +83,11 @@ pub enum Packet {
         pitch: f32,
         on_ground: bool,
     },
+    C07PlayerDigging {
+        status: u8,
+        location: BlockPos,
+        face: u8,
+    },
     S00KeepAlive {
         timestamp: i32,
     },
@@ -133,6 +138,7 @@ impl Packet {
             Packet::C04PlayerPos { .. } => 0x04,
             Packet::C05PlayerRot { .. } => 0x05,
             Packet::C06PlayerPosRot { .. } => 0x06,
+            Packet::C07PlayerDigging { .. } => 0x07,
             Packet::S00KeepAlive { .. } => 0x00,
             Packet::S01JoinGame { .. } => 0x01,
             Packet::S02ChatMessage { .. } => 0x02,

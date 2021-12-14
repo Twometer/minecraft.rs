@@ -194,7 +194,10 @@ impl ClientHandler {
                 info!("Chat message: {}", prepared_message);
                 broadcast_chat(&mut self.broadcast, prepared_message).await;
             }
-
+            Packet::C07PlayerDigging { location, .. } => {
+                // TODO Sanitize position
+                self.world.set_block(location.x, location.y, location.z, 0);
+            }
             _ => {
                 trace!("Received unhandled packet: {:?}", packet);
             }

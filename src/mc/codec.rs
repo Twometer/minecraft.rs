@@ -4,9 +4,12 @@ use bytes::{Buf, BufMut, BytesMut};
 use log::{debug, trace};
 use tokio_util::codec::{Decoder, Encoder};
 
-use crate::mc::{
-    proto::{Packet, PlayState},
-    zlib,
+use crate::{
+    mc::{
+        proto::{Packet, PlayState},
+        zlib,
+    },
+    world::BlockPos,
 };
 
 const PACKET_SIZE_LIMIT: usize = 2 * 1024 * 1024;
@@ -186,6 +189,11 @@ impl MinecraftCodec {
                 yaw: buf.get_f32(),
                 pitch: buf.get_f32(),
                 on_ground: buf.get_bool(),
+            }),
+            0x07 => Some(Packet::C07PlayerDigging {
+                status: buf.get_u8(),
+                location: BlockPos::from_u64(buf.get_u64()),
+                face: buf.get_u8(),
             }),
             _ => None,
         }

@@ -11,6 +11,42 @@ macro_rules! block_state {
     };
 }
 
+#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
+pub struct BlockPos {
+    pub x: i32,
+    pub y: i32,
+    pub z: i32,
+}
+
+impl BlockPos {
+    pub fn new(x: i32, y: i32, z: i32) -> BlockPos {
+        BlockPos { x, y, z }
+    }
+
+    pub fn from_u64(serialized: u64) -> BlockPos {
+        BlockPos {
+            x: Self::to_signed(serialized >> 38, 26),
+            y: Self::to_signed((serialized >> 26) & 0xFFF, 12),
+            z: Self::to_signed(serialized << 38 >> 38, 26),
+        }
+    }
+
+    pub fn to_u64(&self) -> u64 {
+        let x = self.x as u64;
+        let y = self.y as u64;
+        let z = self.z as u64;
+        ((x & 0x3FFFFFF) << 38) | ((y & 0xFFF) << 26) | (z & 0x3FFFFFF)
+    }
+
+    fn to_signed(val: u64, bits: u32) -> i32 {
+        let mut val = val as i32;
+        if val >= i32::pow(2, bits - 1) {
+            val -= i32::pow(2, bits);
+        }
+        val
+    }
+}
+
 #[derive(PartialEq, Eq, Hash, Clone, Copy)]
 pub struct ChunkPos {
     x: i32,
