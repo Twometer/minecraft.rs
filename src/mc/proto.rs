@@ -1,3 +1,5 @@
+use crate::world::Chunk;
+
 #[derive(Debug, Clone)]
 pub enum PlayState {
     Handshake,
@@ -105,7 +107,10 @@ pub enum Packet {
         pitch: f32,
         flags: u8,
     },
-    S26MapChunkBulk {/* TODO */},
+    S26MapChunkBulk {
+        skylight: bool,
+        chunks: Vec<Chunk>,
+    },
 }
 
 impl Packet {

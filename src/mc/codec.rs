@@ -9,6 +9,8 @@ use crate::mc::{
     zlib,
 };
 
+const PACKET_SIZE_LIMIT: usize = 2097152;
+
 pub trait MinecraftBufExt {
     fn has_complete_var_int(&mut self) -> bool;
     fn get_var_int(&mut self) -> i32;
@@ -238,36 +240,44 @@ impl MinecraftCodec {
                 buf.put_f32(pitch);
                 buf.put_u8(flags);
             }
-            Packet::S26MapChunkBulk { .. } => {
-                // TODO: Actual world data instead of demo chunk
+            Packet::S26MapChunkBulk { skylight, chunks } => {
+                buf.put_bool(skylight);
+                buf.put_var_int(chunks.len() as i32);
 
-                buf.put_bool(true); // skylight
-                buf.put_var_int(1); // num chunks
+                let mut block_buf = BytesMut::with_capacity(chunks.len() * 4 * 4096);
+                let mut light_buf = BytesMut::with_capacity(chunks.len() * 4 * 4096);
+                let mut biome_buf = BytesMut::with_capacity(chunks.len() * 256);
 
-                // chunk meta array (only one here)
-                buf.put_i32(0); // X
-                buf.put_i32(0); // Z
-                buf.put_u16(0b0000000000000001); // chunk column bitmask (only lowest section is active)
+                for chunk in chunks {
+                    buf.put_i32(chunk.x);
+                    buf.put_i32(chunk.z);
 
-                // chunk data
-                for _y in 0..16 {
-                    for _z in 0..16 {
-                        for x in 0..16 {
-                            let block_id = x + 1;
-                            buf.put_u16_le(block_id << 4);
+                    let mut bitmask: u16 = 0;
+
+                    // Write blocks
+                    for i in 0..chunk.sections.len() {
+                        let section = &chunk.sections[i];
+                        if section.is_some() {
+                            bitmask |= 1 << i;
+
+                            let section = section.as_ref().unwrap();
+                            for block_state in section.data {
+                                block_buf.put_u16_le(block_state);
+                                light_buf.put_u8(0xff);
+                            }
                         }
                     }
+                    buf.put_u16(bitmask);
+
+                    // Write biomes
+                    biome_buf.extend_from_slice(&chunk.biomes[..]);
                 }
 
-                // light data
-                for _ in 0..4096 {
-                    buf.put_u8(0xFF); // full light
-                }
+                buf.extend_from_slice(&block_buf[..]);
+                buf.extend_from_slice(&light_buf[..]);
+                buf.extend_from_slice(&biome_buf[..]);
 
-                // biome data
-                for _ in 0..256 {
-                    buf.put_u8(2); // desert biome
-                }
+                debug!("Chunk packet is of size {}", buf.len());
             }
             _ => panic!("Invalid packet direction!"),
         }
@@ -287,7 +297,7 @@ impl Decoder for MinecraftCodec {
                 }
 
                 let packet_len = src.get_var_int() as usize;
-                if packet_len > 1024 * 1024 * 1024 {
+                if packet_len > PACKET_SIZE_LIMIT {
                     return Err(io::Error::new(
                         io::ErrorKind::InvalidData,
                         format!("Packet of length {} too large.", packet_len),
@@ -335,6 +345,13 @@ impl Encoder<Packet> for MinecraftCodec {
         let mut packet_buf = BytesMut::new();
         packet_buf.put_var_int(packet_id);
         self.encode_packet(item, &mut packet_buf);
+
+        if packet_buf.len() > PACKET_SIZE_LIMIT {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("Packet of length {} too large.", packet_buf.len()),
+            ));
+        }
 
         if self.compression_threshold > 0 {
             if packet_buf.len() > self.compression_threshold {

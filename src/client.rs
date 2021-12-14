@@ -1,4 +1,4 @@
-use std::{ops::Add, time::Duration};
+use std::{ops::Add, sync::Arc, time::Duration};
 
 use futures::{SinkExt, StreamExt};
 use log::{error, info, trace};
@@ -14,12 +14,14 @@ use tokio_util::codec::Framed;
 use crate::{
     mc::{codec::MinecraftCodec, proto::Packet, proto::PlayState},
     utils::broadcast_chat,
+    world::{Chunk, ChunkPos, World},
 };
 
 pub struct ClientHandler {
     in_stream: Framed<TcpStream, MinecraftCodec>,
     out_stream: mpsc::Receiver<Packet>,
     broadcast: mpsc::Sender<Packet>,
+    world: Arc<World>,
     entity_id: i32,
     username: String,
 }
@@ -29,11 +31,13 @@ impl ClientHandler {
         in_stream: Framed<TcpStream, MinecraftCodec>,
         out_stream: mpsc::Receiver<Packet>,
         broadcast: mpsc::Sender<Packet>,
+        world: Arc<World>,
     ) -> ClientHandler {
         ClientHandler {
             in_stream,
             out_stream,
             broadcast,
+            world,
             entity_id: 0,
             username: String::new(),
         }
@@ -159,9 +163,25 @@ impl ClientHandler {
                     })
                     .await?;
 
-                // TODO Transmit the actual world here
-                self.in_stream.send(Packet::S26MapChunkBulk {}).await?;
+                // Transmit world
+                let mut transmit_chunks = Vec::<Chunk>::new();
+                for z in 0..4 {
+                    for x in 0..4 {
+                        let chunk_opt = self.world.get_chunk(ChunkPos::new(x, z));
+                        if chunk_opt.is_some() {
+                            let chunk = chunk_opt.unwrap().lock().unwrap().clone();
+                            transmit_chunks.push(chunk);
+                        }
+                    }
+                }
+                self.in_stream
+                    .send(Packet::S26MapChunkBulk {
+                        skylight: true,
+                        chunks: transmit_chunks,
+                    })
+                    .await?;
 
+                // Spawn playef into world
                 self.in_stream
                     .send(Packet::S08SetPlayerPosition {
                         x: 0.0,

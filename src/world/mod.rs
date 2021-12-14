@@ -27,8 +27,9 @@ impl ChunkPos {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct Section {
-    data: [u16; 4096],
+    pub data: [u16; 4096],
 }
 
 impl Section {
@@ -46,22 +47,26 @@ impl Section {
     }
 
     pub fn set_block(&mut self, x: i32, y: i32, z: i32, block_state: u16) {
-        if x < 0 || y < 0 || z < 0 || x > 15 || y > 15 || z > 15 {
-            return;
-        }
         let block_idx = x + 16 * (z + 16 * y);
         self.data[block_idx as usize] = block_state
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct Chunk {
-    sections: [Option<Section>; 16],
+    pub x: i32,
+    pub z: i32,
+    pub sections: [Option<Section>; 16],
+    pub biomes: [u8; 256],
 }
 
 impl Chunk {
-    fn new() -> Chunk {
+    fn new(x: i32, z: i32) -> Chunk {
         Chunk {
+            x,
+            z,
             sections: Default::default(),
+            biomes: [0; 256],
         }
     }
 
@@ -111,10 +116,16 @@ impl World {
 
     pub fn create_chunk(&self, pos: ChunkPos) -> MutexChunkRef {
         if !self.chunks.contains_key(&pos) {
-            self.chunks.insert(pos, Arc::new(Mutex::new(Chunk::new())));
+            self.chunks
+                .insert(pos, Arc::new(Mutex::new(Chunk::new(pos.x, pos.z))));
         }
 
         (*self.chunks.get(&pos).unwrap()).clone()
+    }
+
+    pub fn insert_chunk(&self, chunk: Chunk) {
+        self.chunks
+            .insert(ChunkPos::new(chunk.x, chunk.z), Arc::new(Mutex::new(chunk)));
     }
 
     pub fn get_block(&self, x: i32, y: i32, z: i32) -> u16 {
