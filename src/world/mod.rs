@@ -1,9 +1,8 @@
 pub mod gen;
 
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
+
+use dashmap::DashMap;
 
 #[macro_export]
 macro_rules! block_state {
@@ -93,13 +92,13 @@ impl Chunk {
 type MutexChunkRef = Arc<Mutex<Chunk>>;
 
 pub struct World {
-    chunks: HashMap<ChunkPos, MutexChunkRef>,
+    chunks: DashMap<ChunkPos, MutexChunkRef>,
 }
 
 impl World {
     pub fn new() -> World {
         World {
-            chunks: HashMap::new(),
+            chunks: DashMap::with_capacity(32),
         }
     }
 
@@ -110,12 +109,12 @@ impl World {
         }
     }
 
-    pub fn create_chunk(&mut self, pos: ChunkPos) -> MutexChunkRef {
+    pub fn create_chunk(&self, pos: ChunkPos) -> MutexChunkRef {
         if !self.chunks.contains_key(&pos) {
             self.chunks.insert(pos, Arc::new(Mutex::new(Chunk::new())));
         }
 
-        self.chunks[&pos].clone()
+        (*self.chunks.get(&pos).unwrap()).clone()
     }
 
     pub fn get_block(&self, x: i32, y: i32, z: i32) -> u16 {
@@ -126,7 +125,7 @@ impl World {
         }
     }
 
-    pub fn set_block(&mut self, x: i32, y: i32, z: i32, block_state: u16) {
+    pub fn set_block(&self, x: i32, y: i32, z: i32, block_state: u16) {
         let chunk = self.create_chunk(ChunkPos::from_block_pos(x, z));
         chunk
             .lock()

@@ -4,6 +4,8 @@ mod mc;
 mod utils;
 mod world;
 
+use std::time::SystemTime;
+
 use log::{debug, info};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc;
@@ -23,10 +25,12 @@ async fn main() -> std::io::Result<()> {
     info!("Listener bound and ready");
 
     info!("Preparing spawn region...");
-    let mut world = World::new();
-    let mut gen = WorldGenerator::new(&mut world);
+    let start = SystemTime::now();
+    let world = World::new();
+    let gen = WorldGenerator::new(&world);
     gen.generate();
-    info!("Done generating spawn region");
+    let duration = SystemTime::now().duration_since(start).unwrap();
+    info!("Done generating spawn region after {:?}", duration);
 
     let mut broker = PacketBroker::new();
     loop {
