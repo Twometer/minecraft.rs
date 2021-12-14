@@ -9,7 +9,7 @@ use crate::mc::{
     zlib,
 };
 
-const PACKET_SIZE_LIMIT: usize = 2097152;
+const PACKET_SIZE_LIMIT: usize = 2 * 1024 * 1024;
 
 pub trait MinecraftBufExt {
     fn has_complete_var_int(&mut self) -> bool;
@@ -244,40 +244,45 @@ impl MinecraftCodec {
                 buf.put_bool(skylight);
                 buf.put_var_int(chunks.len() as i32);
 
-                let mut block_buf = BytesMut::with_capacity(chunks.len() * 4 * 4096);
-                let mut light_buf = BytesMut::with_capacity(chunks.len() * 4 * 4096);
-                let mut biome_buf = BytesMut::with_capacity(chunks.len() * 256);
+                // Estimate size of final chunk data array to reduce reallocations
+                let avg_section_size = 4096 + 2 * 4096;
+                let estimated_chunk_array_len = chunks.len() * (256 + 4 * avg_section_size);
+                let mut chunk_buf = BytesMut::with_capacity(estimated_chunk_array_len);
 
                 for chunk in chunks {
-                    buf.put_i32(chunk.x);
-                    buf.put_i32(chunk.z);
-
                     let mut bitmask: u16 = 0;
+                    let mut num_sections = 0;
 
-                    // Write blocks
+                    // Write blocks and bitmask to data buffer
                     for i in 0..chunk.sections.len() {
                         let section = &chunk.sections[i];
                         if section.is_some() {
                             bitmask |= 1 << i;
+                            num_sections += 1;
 
                             let section = section.as_ref().unwrap();
                             for block_state in section.data {
-                                block_buf.put_u16_le(block_state);
-                                light_buf.put_u8(0xff);
+                                chunk_buf.put_u16_le(block_state);
                             }
                         }
                     }
-                    buf.put_u16(bitmask);
 
-                    // Write biomes
-                    biome_buf.extend_from_slice(&chunk.biomes[..]);
+                    // Write dummy lighting (Max value everywhere) to data buffer
+                    for _ in 0..(4096 * num_sections) {
+                        chunk_buf.put_u8(0xff);
+                    }
+
+                    // Write biomes to data buffer
+                    chunk_buf.extend_from_slice(&chunk.biomes[..]);
+
+                    // Write metadata to main buffer
+                    buf.put_i32(chunk.x);
+                    buf.put_i32(chunk.z);
+                    buf.put_u16(bitmask);
                 }
 
-                buf.extend_from_slice(&block_buf[..]);
-                buf.extend_from_slice(&light_buf[..]);
-                buf.extend_from_slice(&biome_buf[..]);
-
-                debug!("Chunk packet is of size {}", buf.len());
+                // Copy data buffer to main buffer
+                buf.extend_from_slice(&chunk_buf[..]);
             }
             _ => panic!("Invalid packet direction!"),
         }
