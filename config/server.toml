@@ -1,0 +1,12 @@
+## Server config ##
+motd = "Hello from minecraft.rs"
+slots = 20
+
+[game]
+gamemode = 1
+difficulty = 0
+seed = "noodles"
+
+[network]
+endpoint = "127.0.0.1:25565"
+compression = 256

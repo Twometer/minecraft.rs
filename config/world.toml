@@ -1,0 +1,178 @@
+## World generator config ##
+biome_scale = 4
+ocean_level = 0
+
+# Noise config
+octaves = 6
+falloff = 0.4
+
+# Heightmap config
+elevation_scale = 0.001
+elevation_lac = 2.85
+
+temperature_scale = 0.0015
+temperature_lac = 2
+
+moisture_scale = 0.001
+moisture_lac = 2
+
+river_scale = 0.001
+river_lac = 2
+
+# Biome config
+[biomes]
+    # Sea biomes
+    [biomes.ocean]
+    id = 0
+    temperature = 0
+    elevation = 0
+    scale = 1
+    layer = "sea"
+
+    [biomes.frozen_ocean]
+    id = 10
+    temperature = -0.9
+    elevation = 0
+    scale = 1
+    layer = "sea"
+
+    [biomes.warm_ocean]
+    id = 24
+    temperature = 0.9
+    elevation = 0
+    scale = 1
+    layer = "sea"
+
+    [biomes.beach]
+    id = 16
+    temperature = 0.4
+    elevation = 0.3
+    scale = 0.4
+    layer = "sea"
+
+    [biomes.stone_beach]
+    id = 25
+    temperature = -0.4
+    elevation = 0.3
+    scale = 0.4
+    layer = "sea"
+
+    # River biomes
+    [biomes.river]
+    id = 7
+    temperature = 0.4
+    scale = 1.0
+    layer = "river"
+
+    [biomes.frozen_river]
+    id = 11
+    temperature = -0.4
+    scale = 1.0
+    layer = "river"
+
+    # Land biomes
+    [biomes.jungle]
+    id = 21
+    temperature = 0.65
+    moisture = 0.75
+    elevation = 0.25
+    scale = 1.0
+    layer = "landmass"
+    gen = ['jungle_tree']
+
+    [biomes.jungle_hills]
+    id = 22
+    temperature = 0.65
+    moisture = 0.75
+    elevation = 0.25
+    scale = 2.5
+    layer = "landmass"
+    gen = ['jungle_tree']
+
+    [biomes.desert]
+    id = 2
+    temperature = 0.75
+    moisture = 0.25
+    elevation = 0.0
+    scale = 1.0
+    layer = "landmass"
+    gen = ['cactus']
+
+    [biomes.desert_hills]
+    id = 17
+    temperature = 0.55
+    moisture = 0.25
+    elevation = 1.0
+    scale = 2.5
+    layer = "landmass"
+    gen = ['cactus']
+
+    [biomes.plains]
+    id = 1
+    temperature = 0.35
+    moisture = 0.35
+    elevation = 0.0
+    scale = 0.5
+    layer = "landmass"
+    gen = ['tallgrass']
+
+    [biomes.ice_plains]
+    id = 12
+    temperature = -0.55
+    moisture = 0.35
+    elevation = 0.0
+    scale = 0.5
+    gen = ['spruce_tree', 'snow_layer']
+
+    [biomes.swamp]
+    id = 6
+    temperature = -0.25
+    moisture = 0.75
+    elevation = 0.0
+    scale = 0.5
+    layer = "landmass"
+    gen = []
+
+    [biomes.forest]
+    id = 4
+    temperature = 0.35
+    moisture = 0.5
+    elevation = 0.25
+    scale = 0.95
+    layer = "landmass"
+    gen = ['oak_tree']
+
+    [biomes.forest_hills]
+    id = 18
+    temperature = 0.1
+    moisture = 0.5
+    elevation = 1.0
+    scale = 2.25
+    layer = "landmass"
+    gen = ['oak_tree']
+
+    [biomes.taiga]
+    id = 5
+    temperature = -0.8
+    moisture = 0.5
+    elevation = 0.25
+    scale = 0.95
+    layer = "landmass"
+    gen = ['spruce_tree']
+
+    [biomes.mountains]
+    id = 3
+    temperature = 0.18
+    moisture = 0.2
+    elevation = 1.2
+    scale = 2
+    layer = "landmass"
+
+    [biomes.ice_mountains]
+    id = 13
+    temperature = -0.8
+    moisture = -0.25
+    elevation = 1.85
+    scale = 2
+    layer = "landmass"
+    gen = ['snow']
