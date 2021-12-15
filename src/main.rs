@@ -6,7 +6,7 @@ mod utils;
 mod world;
 
 use std::sync::Arc;
-use std::time::SystemTime;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use log::{debug, info};
 use tokio::net::{TcpListener, TcpStream};
@@ -33,7 +33,12 @@ async fn main() -> std::io::Result<()> {
     info!("Preparing spawn region...");
     let start = SystemTime::now();
     let world = Arc::new(World::new());
-    let gen = WorldGenerator::new(world_gen_conf, world.clone());
+
+    let seed = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as u32;
+    let gen = WorldGenerator::new(seed, world_gen_conf, world.clone());
     gen.generate();
     let duration = SystemTime::now().duration_since(start).unwrap();
     info!("Done generating spawn region after {:?}", duration);

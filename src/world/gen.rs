@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
-use noise::{NoiseFn, SuperSimplex};
+use log::debug;
+use noise::{NoiseFn, Seedable, SuperSimplex};
 
 use crate::{
     block_state,
@@ -16,11 +17,12 @@ pub struct WorldGenerator {
 }
 
 impl WorldGenerator {
-    pub fn new(config: WorldGenConfig, world: Arc<World>) -> WorldGenerator {
+    pub fn new(seed: u32, config: WorldGenConfig, world: Arc<World>) -> WorldGenerator {
+        debug!("Using seed {} for world generation", seed);
         WorldGenerator {
             config,
             world,
-            noise: SuperSimplex::new(),
+            noise: SuperSimplex::new().set_seed(seed),
         }
     }
 
@@ -42,20 +44,22 @@ impl WorldGenerator {
                 let world_x = base_x + x;
                 let world_z = base_z + z;
 
-                let (elevation, biome) = self.sample_biome(world_x, world_z);
-                let noise_val = elevation * biome.scale;
-                let mut h = 64;
-                if !biome.sea_level {
-                    h += (noise_val * 16.0) as i32;
-                }
+                let (_, biomeA) = self.sample_biome(world_x - 4, world_z - 4);
+                let (_, biomeB) = self.sample_biome(world_x + 4, world_z + 4);
+                let (_, biomeC) = self.sample_biome(world_x - 4, world_z + 4);
+                let (_, biomeD) = self.sample_biome(world_x + 4, world_z - 4);
 
-                for y in 0..=h {
-                    chunk.set_block(
-                        x,
-                        y,
-                        z,
-                        self.determine_block(world_x, y, world_z, h, &biome),
-                    );
+                let (elevation, biome) = self.sample_biome(world_x, world_z);
+
+                let interp_scale =
+                    (biome.scale + biomeA.scale + biomeB.scale + biomeC.scale + biomeD.scale) / 5.0;
+                let noise_val = elevation * interp_scale;
+
+                let terrain_height = (noise_val * 16.0) as i32 + 64;
+                let generate_height = if biome.sea_level { 64 } else { terrain_height };
+
+                for y in 0..=generate_height {
+                    chunk.set_block(x, y, z, self.determine_block(y, terrain_height, &biome));
                 }
                 chunk.set_biome(x, z, biome.id);
             }
@@ -64,7 +68,7 @@ impl WorldGenerator {
         self.world.insert_chunk(chunk);
     }
 
-    fn determine_block(&self, x: i32, y: i32, z: i32, h: i32, biome: &BiomeConfig) -> u16 {
+    fn determine_block(&self, y: i32, h: i32, biome: &BiomeConfig) -> u16 {
         if y >= h {
             block_state!(biome.top_block, 0)
         } else if y >= h - 3 {
