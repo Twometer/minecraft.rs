@@ -14,3 +14,4 @@ tokio-util = { version = "0.6.9", features = ["codec"] }
 bytes = "1.1.0"
 futures = "0.3.18"
 dashmap = "5.0.0"
+noise = "0.7.0"
