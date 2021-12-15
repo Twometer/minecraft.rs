@@ -1,5 +1,6 @@
 mod broker;
 mod client;
+mod config;
 mod mc;
 mod utils;
 mod world;
@@ -14,6 +15,7 @@ use tokio_util::codec::Framed;
 
 use crate::broker::PacketBroker;
 use crate::client::ClientHandler;
+use crate::config::WorldGenConfig;
 use crate::mc::{codec::MinecraftCodec, proto::Packet};
 use crate::world::{gen::WorldGenerator, World};
 
@@ -25,10 +27,13 @@ async fn main() -> std::io::Result<()> {
     let listener = TcpListener::bind("127.0.0.1:25565").await?;
     info!("Listener bound and ready");
 
+    let world_gen_conf = WorldGenConfig::load("config/world.toml");
+    debug!("Loaded config {:?}", world_gen_conf);
+
     info!("Preparing spawn region...");
     let start = SystemTime::now();
     let world = Arc::new(World::new());
-    let gen = WorldGenerator::new(world.clone());
+    let gen = WorldGenerator::new(world_gen_conf, world.clone());
     gen.generate();
     let duration = SystemTime::now().duration_since(start).unwrap();
     info!("Done generating spawn region after {:?}", duration);

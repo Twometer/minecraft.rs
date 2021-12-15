@@ -1,14 +1,14 @@
 ## World generator config ##
-biome_scale = 4
+master_scale = 4.5
 ocean_level = 0
 
 # Noise config
-octaves = 6
+octaves = 5
 falloff = 0.4
 
 # Heightmap config
 elevation_scale = 0.001
-elevation_lac = 2.85
+elevation_lac = 2.35
 
 temperature_scale = 0.0015
 temperature_lac = 2
@@ -27,48 +27,59 @@ river_lac = 2
     temperature = 0
     elevation = 0
     scale = 1
-    layer = "sea"
+    layer = "Sea"
+    top_block = 9
+    sea_level = true
 
     [biomes.frozen_ocean]
     id = 10
     temperature = -0.9
     elevation = 0
     scale = 1
-    layer = "sea"
+    layer = "Sea"
+    top_block = 79
+    sea_level = true
 
     [biomes.warm_ocean]
     id = 24
     temperature = 0.9
     elevation = 0
     scale = 1
-    layer = "sea"
+    layer = "Sea"
+    top_block = 9
+    sea_level = true
 
     [biomes.beach]
     id = 16
     temperature = 0.4
     elevation = 0.3
     scale = 0.4
-    layer = "sea"
+    layer = "Sea"
+    top_block = 12
 
     [biomes.stone_beach]
     id = 25
     temperature = -0.4
     elevation = 0.3
     scale = 0.4
-    layer = "sea"
+    layer = "Sea"
+    top_block = 1
 
     # River biomes
     [biomes.river]
     id = 7
     temperature = 0.4
-    scale = 1.0
-    layer = "river"
+    scale = -0.5
+    layer = "River"
+    top_block = 9
+    sea_level = true
 
     [biomes.frozen_river]
     id = 11
     temperature = -0.4
-    scale = 1.0
-    layer = "river"
+    scale = -0.5
+    layer = "River"
+    top_block = 79
 
     # Land biomes
     [biomes.jungle]
@@ -77,8 +88,8 @@ river_lac = 2
     moisture = 0.75
     elevation = 0.25
     scale = 1.0
-    layer = "landmass"
-    gen = ['jungle_tree']
+    layer = "Land"
+    top_block = 2
 
     [biomes.jungle_hills]
     id = 22
@@ -86,8 +97,8 @@ river_lac = 2
     moisture = 0.75
     elevation = 0.25
     scale = 2.5
-    layer = "landmass"
-    gen = ['jungle_tree']
+    layer = "Land"
+    top_block = 2
 
     [biomes.desert]
     id = 2
@@ -95,8 +106,8 @@ river_lac = 2
     moisture = 0.25
     elevation = 0.0
     scale = 1.0
-    layer = "landmass"
-    gen = ['cactus']
+    layer = "Land"
+    top_block = 12
 
     [biomes.desert_hills]
     id = 17
@@ -104,8 +115,8 @@ river_lac = 2
     moisture = 0.25
     elevation = 1.0
     scale = 2.5
-    layer = "landmass"
-    gen = ['cactus']
+    layer = "Land"
+    top_block = 12
 
     [biomes.plains]
     id = 1
@@ -113,8 +124,8 @@ river_lac = 2
     moisture = 0.35
     elevation = 0.0
     scale = 0.5
-    layer = "landmass"
-    gen = ['tallgrass']
+    layer = "Land"
+    top_block = 2
 
     [biomes.ice_plains]
     id = 12
@@ -122,7 +133,8 @@ river_lac = 2
     moisture = 0.35
     elevation = 0.0
     scale = 0.5
-    gen = ['spruce_tree', 'snow_layer']
+    layer = "Land"
+    top_block = 80
 
     [biomes.swamp]
     id = 6
@@ -130,8 +142,8 @@ river_lac = 2
     moisture = 0.75
     elevation = 0.0
     scale = 0.5
-    layer = "landmass"
-    gen = []
+    layer = "Land"
+    top_block = 2
 
     [biomes.forest]
     id = 4
@@ -139,8 +151,8 @@ river_lac = 2
     moisture = 0.5
     elevation = 0.25
     scale = 0.95
-    layer = "landmass"
-    gen = ['oak_tree']
+    layer = "Land"
+    top_block = 2
 
     [biomes.forest_hills]
     id = 18
@@ -148,8 +160,8 @@ river_lac = 2
     moisture = 0.5
     elevation = 1.0
     scale = 2.25
-    layer = "landmass"
-    gen = ['oak_tree']
+    layer = "Land"
+    top_block = 2
 
     [biomes.taiga]
     id = 5
@@ -157,8 +169,8 @@ river_lac = 2
     moisture = 0.5
     elevation = 0.25
     scale = 0.95
-    layer = "landmass"
-    gen = ['spruce_tree']
+    layer = "Land"
+    top_block = 2
 
     [biomes.mountains]
     id = 3
@@ -166,7 +178,8 @@ river_lac = 2
     moisture = 0.2
     elevation = 1.2
     scale = 2
-    layer = "landmass"
+    layer = "Land"
+    top_block = 1
 
     [biomes.ice_mountains]
     id = 13
@@ -174,5 +187,5 @@ river_lac = 2
     moisture = -0.25
     elevation = 1.85
     scale = 2
-    layer = "landmass"
-    gen = ['snow']
+    layer = "Land"
+    top_block = 80

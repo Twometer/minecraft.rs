@@ -8,10 +8,13 @@ deflate = "1.0.0"
 inflate = "0.4.5"
 log = "0.4.14"
 pretty_env_logger = "0.4.0"
+serde = "1.0.131"
 serde_json = "1.0.72"
+serde_derive = "1.0.131"
 tokio = { version = "1.14.0", features = ["full"] }
 tokio-util = { version = "0.6.9", features = ["codec"] }
 bytes = "1.1.0"
 futures = "0.3.18"
 dashmap = "5.0.0"
 noise = "0.7.0"
+toml = "0.5.8"

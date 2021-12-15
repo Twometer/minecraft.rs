@@ -7,7 +7,7 @@ use dashmap::DashMap;
 #[macro_export]
 macro_rules! block_state {
     ($id: expr, $data: expr) => {
-        ($id << 4 | ($data & 0x0f))
+        (($id as u16) << 4 | (($data as u16) & 0x0f))
     };
 }
 
@@ -127,6 +127,10 @@ impl Chunk {
             .as_mut()
             .unwrap()
             .set_block(x, y & 0x0f, z, block_state)
+    }
+
+    pub fn set_biome(&mut self, x: i32, z: i32, biome: u8) {
+        self.biomes[(z * 16 + x) as usize] = biome;
     }
 }
 
