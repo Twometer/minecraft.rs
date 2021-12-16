@@ -1,14 +1,14 @@
 ## World generator config ##
 master_scale = 4.5
-ocean_level = 0
+ocean_level = 0.02
 
 # Noise config
-octaves = 5
-falloff = 0.4
+octaves = 6
+falloff = 0.3
 
 # Heightmap config
 elevation_scale = 0.001
-elevation_lac = 2.35
+elevation_lac = 2.55
 
 temperature_scale = 0.0015
 temperature_lac = 2
@@ -66,6 +66,7 @@ river_lac = 2
     layer = "Sea"
     blocks = [1, 1, 1]
     sea_level = true
+    features = { boulders = 0.2 }
 
     # River biomes
     [biomes.river]
@@ -92,6 +93,7 @@ river_lac = 2
     scale = 1.0
     layer = "Land"
     blocks = [2, 3, 3]
+    features = { grass = 0.5, bushes = 0.35, jungle_tree = 0.03 }
 
     [biomes.jungle_hills]
     id = 22
@@ -101,6 +103,7 @@ river_lac = 2
     scale = 2.5
     layer = "Land"
     blocks = [2, 3, 3]
+    features = { grass = 0.5, bushes = 0.35, jungle_tree = 0.03 }
 
     [biomes.desert]
     id = 2
@@ -110,6 +113,7 @@ river_lac = 2
     scale = 1.0
     layer = "Land"
     blocks = [12, 12, 24]
+    features = { cacti = 0.005 }
 
     [biomes.desert_hills]
     id = 17
@@ -119,6 +123,7 @@ river_lac = 2
     scale = 2.5
     layer = "Land"
     blocks = [12, 12, 24]
+    features = { cacti = 0.005 }
 
     [biomes.plains]
     id = 1
@@ -128,6 +133,7 @@ river_lac = 2
     scale = 0.5
     layer = "Land"
     blocks = [2, 3, 3]
+    features = { grass = 0.4, flowers = 0.15, warm_tree = 0.002 }
 
     [biomes.ice_plains]
     id = 12
@@ -138,6 +144,7 @@ river_lac = 2
     layer = "Land"
     blocks = [2, 3, 3]
     surface_layer = 78
+    features = { grass = 0.1, cold_tree = 0.002 }
 
     [biomes.swamp]
     id = 6
@@ -147,6 +154,7 @@ river_lac = 2
     scale = 0.5
     layer = "Land"
     blocks = [2, 3, 3]
+    features = { wetland = 0.5, lilypads = 0.06, warm_tree = 0.005 }
 
     [biomes.forest]
     id = 4
@@ -156,6 +164,7 @@ river_lac = 2
     scale = 0.95
     layer = "Land"
     blocks = [2, 3, 3]
+    features = { grass = 0.4, flowers = 0.05, warm_tree = 0.03 }
 
     [biomes.forest_hills]
     id = 18
@@ -165,6 +174,7 @@ river_lac = 2
     scale = 2.25
     layer = "Land"
     blocks = [2, 3, 3]
+    features = { grass = 0.3, warm_tree = 0.03 }
 
     [biomes.taiga]
     id = 5
@@ -174,6 +184,7 @@ river_lac = 2
     scale = 0.95
     layer = "Land"
     blocks = [2, 3, 3]
+    features = { grass = 0.05, cold_tree = 0.2 }
     surface_layer = 78
 
     [biomes.mountains]
@@ -194,3 +205,4 @@ river_lac = 2
     layer = "Land"
     blocks = [1, 1, 1]
     surface_layer = 78
+    features = { icicles = 0.05 }

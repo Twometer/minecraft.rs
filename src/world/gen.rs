@@ -1,7 +1,8 @@
-use std::sync::Arc;
+use std::{panic, sync::Arc};
 
 use log::debug;
 use noise::{NoiseFn, Seedable, SuperSimplex};
+use rand::{prelude::StdRng, Rng, SeedableRng};
 
 use crate::{
     block_state,
@@ -21,6 +22,7 @@ pub struct WorldGenerator {
 impl WorldGenerator {
     pub fn new(seed: u32, config: WorldGenConfig, world: Arc<World>) -> WorldGenerator {
         debug!("Using seed {} for world generation", seed);
+
         WorldGenerator {
             config,
             world,
@@ -59,13 +61,16 @@ impl WorldGenerator {
                     chunk.set_block(x, y, z, block_state);
                 }
 
+                let top_y = generate_height + 1;
+
                 if biome.surface_layer.is_some() {
-                    chunk.set_block(
-                        x,
-                        generate_height + 1,
-                        z,
-                        block_state!(biome.surface_layer.unwrap(), 0),
-                    );
+                    chunk.set_block(x, top_y, z, block_state!(biome.surface_layer.unwrap(), 0));
+                }
+
+                for (feature, prob) in &biome.features {
+                    if self.should_generate(*prob) {
+                        self.generate_feature(feature, &mut chunk, x, top_y, z);
+                    }
                 }
 
                 chunk.set_biome(x, z, biome.id);
@@ -75,6 +80,59 @@ impl WorldGenerator {
         self.world.insert_chunk(chunk);
     }
 
+    fn generate_feature(&self, feature: &str, chunk: &mut Chunk, x: i32, top_y: i32, z: i32) {
+        match feature {
+            "grass" => {
+                chunk.set_block(x, top_y, z, block_state!(31, 1));
+            }
+            "bushes" => {
+                chunk.set_block(x, top_y, z, block_state!(18, 3));
+            }
+            "flowers" => {
+                chunk.set_block(x, top_y, z, block_state!(38, 0));
+            }
+            "wetland" => {
+                chunk.set_block(x, top_y - 1, z, block_state!(9, 0));
+            }
+            "lilypads" => {
+                chunk.set_block(x, top_y, z, block_state!(111, 0));
+            }
+            "boulders" => {
+                chunk.set_block(x, top_y - 1, z, block_state!(1, 5));
+            }
+            "cacti" => {
+                for i in 0..3 {
+                    chunk.set_block(x, top_y + i, z, block_state!(81, 0));
+                }
+            }
+            "icicles" => {
+                for i in 0..3 {
+                    chunk.set_block(x, top_y + i, z, block_state!(174, 0));
+                }
+            }
+            "warm_tree" => {
+                for i in 0..4 {
+                    chunk.set_block(x, top_y + i, z, block_state!(17, 0));
+                }
+            }
+            "cold_tree" => {
+                for i in 0..4 {
+                    chunk.set_block(x, top_y + i, z, block_state!(17, 1));
+                }
+            }
+            "jungle_tree" => {
+                for i in 0..8 {
+                    chunk.set_block(x, top_y + i, z, block_state!(17, 3));
+                }
+            }
+            _ => panic!("Unknown feature {}", feature),
+        }
+    }
+
+    fn should_generate(&self, prob: f64) -> bool {
+        rand::thread_rng().gen_bool(prob)
+    }
+
     fn determine_block(&self, y: i32, th: i32, gh: i32, biome: &BiomeConfig) -> u16 {
         if y == gh {
             block_state!(biome.blocks[0], 0)
@@ -82,8 +140,19 @@ impl WorldGenerator {
             block_state!(biome.blocks[1], 0)
         } else if y >= th - 3 {
             block_state!(biome.blocks[2], 0)
-        } else {
+        } else if y > 3 {
             block_state!(1, 0)
+        } else if y > 0 {
+            block_state!(
+                if rand::thread_rng().gen_bool(0.5) {
+                    7
+                } else {
+                    1
+                },
+                0
+            )
+        } else {
+            block_state!(7, 0)
         }
     }
 

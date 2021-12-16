@@ -21,6 +21,8 @@ pub struct BiomeConfig {
     pub sea_level: bool,
     pub blocks: Vec<u8>,
     pub surface_layer: Option<u8>,
+    #[serde(default)]
+    pub features: HashMap<String, f64>,
 }
 
 #[derive(Debug, Deserialize)]
