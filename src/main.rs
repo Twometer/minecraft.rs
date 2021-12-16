@@ -43,6 +43,7 @@ async fn main() -> std::io::Result<()> {
     let sched = GenerationScheduler::new(world.clone(), gen.clone());
     sched.start(4);
     sched.request_region(0, 0, 10);
+    sched.await_region(0, 0, 10).await;
 
     let duration = SystemTime::now().duration_since(start).unwrap();
     info!("Done generating spawn region after {:?}", duration);
