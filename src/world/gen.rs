@@ -10,6 +10,8 @@ use crate::{
     world::World,
 };
 
+use super::math::dist;
+
 pub struct WorldGenerator {
     config: WorldGenConfig,
     world: Arc<World>,
@@ -26,7 +28,7 @@ impl WorldGenerator {
         }
     }
 
-    pub fn generate(&self) {
+    pub fn generate_spawn(&self) {
         for x in -10..=10 {
             for z in -10..=10 {
                 self.generate_chunk(x, z)
@@ -44,23 +46,28 @@ impl WorldGenerator {
                 let world_x = base_x + x;
                 let world_z = base_z + z;
 
-                let (_, biomeA) = self.sample_biome(world_x - 4, world_z - 4);
-                let (_, biomeB) = self.sample_biome(world_x + 4, world_z + 4);
-                let (_, biomeC) = self.sample_biome(world_x - 4, world_z + 4);
-                let (_, biomeD) = self.sample_biome(world_x + 4, world_z - 4);
-
                 let (elevation, biome) = self.sample_biome(world_x, world_z);
+                let interp_scale = self.multi_sample_biome_scale(world_x, world_z, 3);
 
-                let interp_scale =
-                    (biome.scale + biomeA.scale + biomeB.scale + biomeC.scale + biomeD.scale) / 5.0;
                 let noise_val = elevation * interp_scale;
-
                 let terrain_height = (noise_val * 16.0) as i32 + 64;
                 let generate_height = if biome.sea_level { 64 } else { terrain_height };
 
                 for y in 0..=generate_height {
-                    chunk.set_block(x, y, z, self.determine_block(y, terrain_height, &biome));
+                    let block_state =
+                        self.determine_block(y, terrain_height, generate_height, biome);
+                    chunk.set_block(x, y, z, block_state);
                 }
+
+                if biome.surface_layer.is_some() {
+                    chunk.set_block(
+                        x,
+                        generate_height + 1,
+                        z,
+                        block_state!(biome.surface_layer.unwrap(), 0),
+                    );
+                }
+
                 chunk.set_biome(x, z, biome.id);
             }
         }
@@ -68,17 +75,31 @@ impl WorldGenerator {
         self.world.insert_chunk(chunk);
     }
 
-    fn determine_block(&self, y: i32, h: i32, biome: &BiomeConfig) -> u16 {
-        if y >= h {
-            block_state!(biome.top_block, 0)
-        } else if y >= h - 3 {
-            block_state!(3, 0)
+    fn determine_block(&self, y: i32, th: i32, gh: i32, biome: &BiomeConfig) -> u16 {
+        if y == gh {
+            block_state!(biome.blocks[0], 0)
+        } else if y >= th {
+            block_state!(biome.blocks[1], 0)
+        } else if y >= th - 3 {
+            block_state!(biome.blocks[2], 0)
         } else {
             block_state!(1, 0)
         }
     }
 
-    fn sample_biome(&self, x: i32, z: i32) -> (f64, BiomeConfig) {
+    fn multi_sample_biome_scale(&self, x: i32, z: i32, r: i32) -> f64 {
+        let mut total = 0.0;
+        let mut denom = 0.0;
+        for x_offset in -r..=r {
+            for z_offset in -r..=r {
+                total += self.sample_biome(x + x_offset, z + z_offset).1.scale;
+                denom += 1.0;
+            }
+        }
+        total / denom
+    }
+
+    fn sample_biome(&self, x: i32, z: i32) -> (f64, &BiomeConfig) {
         let elevation =
             self.sample_noise_fractal(x, z, self.config.elevation_scale, self.config.elevation_lac);
         let temperature = self.sample_noise_fractal(
@@ -107,20 +128,18 @@ impl WorldGenerator {
         moisture: f64,
         elevation: f64,
         river: f64,
-    ) -> BiomeConfig {
-        if (elevation - self.config.ocean_level).abs() < 0.025 {
-            return self.config.biomes["beach"];
-        }
-
-        let layer = if elevation >= self.config.ocean_level && river < 0.015 {
+    ) -> &BiomeConfig {
+        let layer = if elevation >= self.config.ocean_level - 0.025 && river < 0.015 {
             BiomeLayer::River
+        } else if (elevation - self.config.ocean_level).abs() < 0.025 {
+            return &self.config.biomes["beach"];
         } else if elevation < self.config.ocean_level {
             BiomeLayer::Sea
         } else {
             BiomeLayer::Land
         };
 
-        let mut best_biome_name = "forest".to_string();
+        let mut best_biome_name = "forest";
         let mut best_biome_dist = f64::MAX;
 
         for (name, biome) in &self.config.biomes {
@@ -128,17 +147,17 @@ impl WorldGenerator {
                 continue;
             }
 
-            let de = Self::dist(elevation, biome.elevation);
-            let dt = Self::dist(temperature, biome.temperature);
-            let dm = Self::dist(moisture, biome.moisture);
+            let de = dist(elevation, biome.elevation);
+            let dt = dist(temperature, biome.temperature);
+            let dm = dist(moisture, biome.moisture);
             let d = de * de + dt * dt + dm * dm;
             if d < best_biome_dist {
                 best_biome_dist = d;
-                best_biome_name = name.to_string();
+                best_biome_name = name;
             }
         }
 
-        return self.config.biomes[best_biome_name.as_str()];
+        return &self.config.biomes[best_biome_name];
     }
 
     fn sample_noise_fractal(&self, x: i32, z: i32, mut scale: f64, lac: f64) -> f64 {
@@ -147,7 +166,7 @@ impl WorldGenerator {
         scale *= self.config.master_scale;
 
         let mut amplitude = 1.0;
-        for i in 0..self.config.octaves {
+        for _ in 0..self.config.octaves {
             result += amplitude * self.noise.get([x as f64 * scale, z as f64 * scale]);
             denom += amplitude;
 
@@ -156,13 +175,5 @@ impl WorldGenerator {
         }
 
         result / denom
-    }
-
-    fn dist(a: f64, b: Option<f64>) -> f64 {
-        if b.is_none() {
-            0.0
-        } else {
-            b.unwrap() - a
-        }
     }
 }

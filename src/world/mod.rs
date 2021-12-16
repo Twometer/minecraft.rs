@@ -1,4 +1,5 @@
 pub mod gen;
+mod math;
 
 use std::sync::{Arc, Mutex};
 

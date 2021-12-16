@@ -9,7 +9,7 @@ pub enum BiomeLayer {
     Land,
 }
 
-#[derive(Debug, Deserialize, Clone, Copy)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct BiomeConfig {
     pub id: u8,
     pub temperature: Option<f64>,
@@ -17,9 +17,10 @@ pub struct BiomeConfig {
     pub moisture: Option<f64>,
     pub scale: f64,
     pub layer: BiomeLayer,
-    pub top_block: u8,
     #[serde(default)]
     pub sea_level: bool,
+    pub blocks: Vec<u8>,
+    pub surface_layer: Option<u8>,
 }
 
 #[derive(Debug, Deserialize)]

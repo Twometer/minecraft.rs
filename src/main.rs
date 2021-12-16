@@ -39,7 +39,7 @@ async fn main() -> std::io::Result<()> {
         .unwrap()
         .as_secs() as u32;
     let gen = WorldGenerator::new(seed, world_gen_conf, world.clone());
-    gen.generate();
+    gen.generate_spawn();
     let duration = SystemTime::now().duration_since(start).unwrap();
     info!("Done generating spawn region after {:?}", duration);
 

@@ -28,7 +28,7 @@ river_lac = 2
     elevation = 0
     scale = 1
     layer = "Sea"
-    top_block = 9
+    blocks = [9, 9, 13]
     sea_level = true
 
     [biomes.frozen_ocean]
@@ -37,7 +37,7 @@ river_lac = 2
     elevation = 0
     scale = 1
     layer = "Sea"
-    top_block = 79
+    blocks = [79, 9, 13]
     sea_level = true
 
     [biomes.warm_ocean]
@@ -46,7 +46,7 @@ river_lac = 2
     elevation = 0
     scale = 1
     layer = "Sea"
-    top_block = 9
+    blocks = [9, 9, 13]
     sea_level = true
 
     [biomes.beach]
@@ -55,7 +55,8 @@ river_lac = 2
     elevation = 0.3
     scale = 0.4
     layer = "Sea"
-    top_block = 12
+    blocks = [12, 12, 24]
+    sea_level = true
 
     [biomes.stone_beach]
     id = 25
@@ -63,7 +64,8 @@ river_lac = 2
     elevation = 0.3
     scale = 0.4
     layer = "Sea"
-    top_block = 1
+    blocks = [1, 1, 1]
+    sea_level = true
 
     # River biomes
     [biomes.river]
@@ -71,7 +73,7 @@ river_lac = 2
     temperature = 0.4
     scale = -0.5
     layer = "River"
-    top_block = 9
+    blocks = [9, 9, 13]
     sea_level = true
 
     [biomes.frozen_river]
@@ -79,7 +81,7 @@ river_lac = 2
     temperature = -0.4
     scale = -0.5
     layer = "River"
-    top_block = 79
+    blocks = [79, 9, 13]
 
     # Land biomes
     [biomes.jungle]
@@ -89,7 +91,7 @@ river_lac = 2
     elevation = 0.25
     scale = 1.0
     layer = "Land"
-    top_block = 2
+    blocks = [2, 3, 3]
 
     [biomes.jungle_hills]
     id = 22
@@ -98,7 +100,7 @@ river_lac = 2
     elevation = 0.25
     scale = 2.5
     layer = "Land"
-    top_block = 2
+    blocks = [2, 3, 3]
 
     [biomes.desert]
     id = 2
@@ -107,7 +109,7 @@ river_lac = 2
     elevation = 0.0
     scale = 1.0
     layer = "Land"
-    top_block = 12
+    blocks = [12, 12, 24]
 
     [biomes.desert_hills]
     id = 17
@@ -116,7 +118,7 @@ river_lac = 2
     elevation = 1.0
     scale = 2.5
     layer = "Land"
-    top_block = 12
+    blocks = [12, 12, 24]
 
     [biomes.plains]
     id = 1
@@ -125,7 +127,7 @@ river_lac = 2
     elevation = 0.0
     scale = 0.5
     layer = "Land"
-    top_block = 2
+    blocks = [2, 3, 3]
 
     [biomes.ice_plains]
     id = 12
@@ -134,7 +136,8 @@ river_lac = 2
     elevation = 0.0
     scale = 0.5
     layer = "Land"
-    top_block = 80
+    blocks = [2, 3, 3]
+    surface_layer = 78
 
     [biomes.swamp]
     id = 6
@@ -143,7 +146,7 @@ river_lac = 2
     elevation = 0.0
     scale = 0.5
     layer = "Land"
-    top_block = 2
+    blocks = [2, 3, 3]
 
     [biomes.forest]
     id = 4
@@ -152,7 +155,7 @@ river_lac = 2
     elevation = 0.25
     scale = 0.95
     layer = "Land"
-    top_block = 2
+    blocks = [2, 3, 3]
 
     [biomes.forest_hills]
     id = 18
@@ -161,7 +164,7 @@ river_lac = 2
     elevation = 0.8
     scale = 2.25
     layer = "Land"
-    top_block = 2
+    blocks = [2, 3, 3]
 
     [biomes.taiga]
     id = 5
@@ -170,7 +173,8 @@ river_lac = 2
     elevation = 0.25
     scale = 0.95
     layer = "Land"
-    top_block = 2
+    blocks = [2, 3, 3]
+    surface_layer = 78
 
     [biomes.mountains]
     id = 3
@@ -179,7 +183,7 @@ river_lac = 2
     elevation = 1.2
     scale = 2
     layer = "Land"
-    top_block = 1
+    blocks = [1, 1, 1]
 
     [biomes.ice_mountains]
     id = 13
@@ -188,4 +192,5 @@ river_lac = 2
     elevation = 1.85
     scale = 2
     layer = "Land"
-    top_block = 80
+    blocks = [1, 1, 1]
+    surface_layer = 78
