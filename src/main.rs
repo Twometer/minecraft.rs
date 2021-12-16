@@ -17,6 +17,7 @@ use crate::broker::PacketBroker;
 use crate::client::ClientHandler;
 use crate::config::WorldGenConfig;
 use crate::mc::{codec::MinecraftCodec, proto::Packet};
+use crate::world::sched::GenerationScheduler;
 use crate::world::{gen::WorldGenerator, World};
 
 #[tokio::main]
@@ -38,8 +39,11 @@ async fn main() -> std::io::Result<()> {
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_secs() as u32;
-    let gen = WorldGenerator::new(seed, world_gen_conf, world.clone());
-    gen.generate_spawn();
+    let gen = Arc::new(WorldGenerator::new(seed, world_gen_conf, world.clone()));
+    let sched = GenerationScheduler::new(world.clone(), gen.clone());
+    sched.start(4);
+    sched.request_region(0, 0, 10);
+
     let duration = SystemTime::now().duration_since(start).unwrap();
     info!("Done generating spawn region after {:?}", duration);
 

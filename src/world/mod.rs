@@ -1,5 +1,6 @@
 pub mod gen;
 mod math;
+pub mod sched;
 
 use std::sync::{Arc, Mutex};
 
@@ -48,7 +49,7 @@ impl BlockPos {
     }
 }
 
-#[derive(PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
 pub struct ChunkPos {
     x: i32,
     z: i32,
@@ -162,6 +163,10 @@ impl World {
         }
 
         (*self.chunks.get(&pos).unwrap()).clone()
+    }
+
+    pub fn has_chunk(&self, x: i32, z: i32) -> bool {
+        self.chunks.contains_key(&ChunkPos::new(x, z))
     }
 
     pub fn insert_chunk(&self, chunk: Chunk) {

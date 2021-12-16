@@ -2,7 +2,7 @@ use std::{panic, sync::Arc};
 
 use log::debug;
 use noise::{NoiseFn, Seedable, SuperSimplex};
-use rand::{prelude::StdRng, Rng, SeedableRng};
+use rand::Rng;
 
 use crate::{
     block_state,
@@ -30,15 +30,11 @@ impl WorldGenerator {
         }
     }
 
-    pub fn generate_spawn(&self) {
-        for x in -10..=10 {
-            for z in -10..=10 {
-                self.generate_chunk(x, z)
-            }
+    pub fn generate_chunk(&self, chunk_x: i32, chunk_z: i32) {
+        if self.world.has_chunk(chunk_x, chunk_z) {
+            return;
         }
-    }
 
-    fn generate_chunk(&self, chunk_x: i32, chunk_z: i32) {
         let mut chunk = Chunk::new(chunk_x, chunk_z);
         let base_x = chunk_x << 4;
         let base_z = chunk_z << 4;
