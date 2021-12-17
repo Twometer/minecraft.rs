@@ -114,7 +114,7 @@ river_lac = 2
     scale = 1.0
     layer = "Land"
     blocks = [12, 12, 24]
-    features = { cacti = 0.005 }
+    features = { cacti = 0.002, dead_bushes = 0.006 }
 
     [biomes.desert_hills]
     id = 17
@@ -124,7 +124,7 @@ river_lac = 2
     scale = 2.5
     layer = "Land"
     blocks = [12, 12, 24]
-    features = { cacti = 0.005 }
+    features = { cacti = 0.002, dead_bushes = 0.006 }
 
     [biomes.plains]
     id = 1
@@ -134,7 +134,7 @@ river_lac = 2
     scale = 0.5
     layer = "Land"
     blocks = [2, 3, 3]
-    features = { grass = 0.4, flowers = 0.15, warm_tree = 0.002 }
+    features = { grass = 0.4, flowers = 0.05, warm_tree = 0.002 }
 
     [biomes.ice_plains]
     id = 12
@@ -155,7 +155,7 @@ river_lac = 2
     scale = 0.5
     layer = "Land"
     blocks = [2, 3, 3]
-    features = { wetland = 0.5, lilypads = 0.06, warm_tree = 0.002 }
+    features = { puddles = 0.5, lilypads = 0.06, warm_tree = 0.002 }
 
     [biomes.forest]
     id = 4
@@ -165,7 +165,7 @@ river_lac = 2
     scale = 0.95
     layer = "Land"
     blocks = [2, 3, 3]
-    features = { grass = 0.4, flowers = 0.05, warm_tree = 0.03 }
+    features = { grass = 0.4, flowers = 0.05, fern = 0.04, mushrooms = 0.04, warm_tree = 0.03 }
 
     [biomes.forest_hills]
     id = 18
@@ -175,7 +175,7 @@ river_lac = 2
     scale = 2.25
     layer = "Land"
     blocks = [2, 3, 3]
-    features = { grass = 0.3, warm_tree = 0.03 }
+    features = { grass = 0.4, flowers = 0.05, fern = 0.04, mushrooms = 0.04, warm_tree = 0.03 }
 
     [biomes.taiga]
     id = 5
@@ -185,7 +185,7 @@ river_lac = 2
     scale = 0.95
     layer = "Land"
     blocks = [2, 3, 3]
-    features = { grass = 0.05, cold_tree = 0.03 }
+    features = { grass = 0.05, mushrooms = 0.03, cold_tree = 0.03 }
     surface_layer = 78
 
     [biomes.mountains]
@@ -196,6 +196,7 @@ river_lac = 2
     scale = 2
     layer = "Land"
     blocks = [1, 1, 1]
+    features = { mushrooms = 0.005 }
 
     [biomes.ice_mountains]
     id = 13
@@ -206,4 +207,54 @@ river_lac = 2
     layer = "Land"
     blocks = [1, 1, 1]
     surface_layer = 78
-    features = { icicles = 0.005 }
+    features = { icicles = 0.001, mushrooms = 0.0005 }
+
+[ores]
+    [ores.coal]
+    id = 16
+    center = 64
+    spread = 64
+    scale = 0.1
+    threshold = 0.7
+
+    [ores.iron]
+    id = 15
+    center = 45
+    spread = 25
+    scale = 0.13
+    threshold = 0.81
+
+    [ores.gold]
+    id = 14
+    center = 25
+    spread = 5
+    scale = 0.15
+    threshold = 0.8
+
+    [ores.diamond]
+    id = 56
+    center = 0
+    spread = 14
+    scale = 0.2
+    threshold = 0.75
+
+    [ores.redstone]
+    id = 73
+    center = 0
+    spread = 20
+    scale = 0.1
+    threshold = 0.8
+
+    [ores.lapis]
+    id = 21
+    center = 0
+    spread = 20
+    scale = 0.12
+    threshold = 0.8
+
+    [ores.emerald]
+    id = 129
+    center = 10
+    spread = 2
+    scale = 0.2
+    threshold = 0.82

@@ -50,36 +50,39 @@ impl WorldGenerator {
                 let noise_val = elevation * interp_scale;
                 let terrain_height = (noise_val * 16.0) as i32 + 64;
                 let generate_height = if biome.sea_level { 64 } else { terrain_height };
+                let top_layer_height = generate_height + 1;
 
+                // Convert heightmap to block
                 for y in 0..=generate_height {
-                    if y < terrain_height
-                        && self.noise.get([
-                            world_x as f64 * 0.05,
-                            y as f64 * 0.1,
-                            world_z as f64 * 0.05,
-                        ]) > 0.63
-                    {
-                        chunk.set_block(x, y, z, block_state!(56, 0));
-                        continue;
-                    }
-
-                    let block_state =
-                        self.determine_block(y, terrain_height, generate_height, biome);
+                    let block_state = self.determine_block(
+                        world_x,
+                        y,
+                        world_z,
+                        terrain_height,
+                        generate_height,
+                        biome,
+                    );
                     chunk.set_block(x, y, z, block_state);
                 }
 
-                let top_y = generate_height + 1;
-
+                // Apply surface layer
                 if biome.surface_layer.is_some() {
-                    chunk.set_block(x, top_y, z, block_state!(biome.surface_layer.unwrap(), 0));
+                    chunk.set_block(
+                        x,
+                        top_layer_height,
+                        z,
+                        block_state!(biome.surface_layer.unwrap(), 0),
+                    );
                 }
 
+                // Generate features
                 for (feature, prob) in &biome.features {
                     if self.should_generate(*prob) {
-                        self.generate_feature(feature, &mut chunk, x, top_y, z);
+                        self.generate_feature(feature, &mut chunk, x, top_layer_height, z);
                     }
                 }
 
+                // Set biome
                 chunk.set_biome(x, z, biome.id);
             }
         }
@@ -92,13 +95,22 @@ impl WorldGenerator {
             "grass" => {
                 chunk.set_block(x, top_y, z, block_state!(31, 1));
             }
+            "fern" => {
+                chunk.set_block(x, top_y, z, block_state!(31, 2));
+            }
             "bushes" => {
                 chunk.set_block(x, top_y, z, block_state!(18, 3));
+            }
+            "dead_bushes" => {
+                chunk.set_block(x, top_y, z, block_state!(32, 0));
             }
             "flowers" => {
                 chunk.set_block(x, top_y, z, block_state!(38, 0));
             }
-            "wetland" => {
+            "mushrooms" => {
+                chunk.set_block(x, top_y, z, block_state!(39, 0));
+            }
+            "puddles" => {
                 chunk.set_block(x, top_y - 1, z, block_state!(9, 0));
             }
             "lilypads" => {
@@ -202,7 +214,39 @@ impl WorldGenerator {
         rand::thread_rng().gen_bool(prob)
     }
 
-    fn determine_block(&self, y: i32, th: i32, gh: i32, biome: &BiomeConfig) -> u16 {
+    fn determine_block_underground(&self, x: i32, y: i32, z: i32) -> u16 {
+        for (_, ore) in &self.config.ores {
+            let offset = ore.id as f64 * 1000.0;
+            let noise = self.noise.get([
+                x as f64 * ore.scale,
+                y as f64 * ore.scale + offset,
+                z as f64 * ore.scale,
+            ]);
+
+            let diff = (ore.center - (y as f64)).abs();
+            if diff > ore.spread {
+                continue;
+            }
+
+            let offset = diff / ore.spread;
+            let threshold = ore.threshold + (offset * 0.055);
+            if noise > threshold {
+                return block_state!(ore.id, 0);
+            }
+        }
+
+        block_state!(1, 0)
+    }
+
+    fn determine_block(
+        &self,
+        x: i32,
+        y: i32,
+        z: i32,
+        th: i32,
+        gh: i32,
+        biome: &BiomeConfig,
+    ) -> u16 {
         if y == gh {
             block_state!(biome.blocks[0], 0)
         } else if y >= th {
@@ -210,7 +254,7 @@ impl WorldGenerator {
         } else if y >= th - 3 {
             block_state!(biome.blocks[2], 0)
         } else if y > 3 {
-            block_state!(1, 0)
+            self.determine_block_underground(x, y, z)
         } else if y > 0 {
             block_state!(
                 if rand::thread_rng().gen_bool(0.5) {

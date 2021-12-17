@@ -26,6 +26,15 @@ pub struct BiomeConfig {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct OreConfig {
+    pub id: u8,
+    pub center: f64,
+    pub spread: f64,
+    pub scale: f64,
+    pub threshold: f64,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct WorldGenConfig {
     pub master_scale: f64,
     pub ocean_level: f64,
@@ -40,6 +49,7 @@ pub struct WorldGenConfig {
     pub river_scale: f64,
     pub river_lac: f64,
     pub biomes: HashMap<String, BiomeConfig>,
+    pub ores: HashMap<String, OreConfig>,
 }
 
 impl WorldGenConfig {
