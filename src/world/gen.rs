@@ -52,6 +52,17 @@ impl WorldGenerator {
                 let generate_height = if biome.sea_level { 64 } else { terrain_height };
 
                 for y in 0..=generate_height {
+                    if y < terrain_height
+                        && self.noise.get([
+                            world_x as f64 * 0.05,
+                            y as f64 * 0.1,
+                            world_z as f64 * 0.05,
+                        ]) > 0.63
+                    {
+                        chunk.set_block(x, y, z, block_state!(56, 0));
+                        continue;
+                    }
+
                     let block_state =
                         self.determine_block(y, terrain_height, generate_height, biome);
                     chunk.set_block(x, y, z, block_state);
