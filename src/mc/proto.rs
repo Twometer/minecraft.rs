@@ -112,6 +112,10 @@ pub enum Packet {
         pitch: f32,
         flags: u8,
     },
+    S21ChunkData {
+        x: i32,
+        z: i32,
+    },
     S26MapChunkBulk {
         skylight: bool,
         chunks: Vec<Chunk>,
@@ -143,6 +147,7 @@ impl Packet {
             Packet::S01JoinGame { .. } => 0x01,
             Packet::S02ChatMessage { .. } => 0x02,
             Packet::S08SetPlayerPosition { .. } => 0x08,
+            Packet::S21ChunkData { .. } => 0x21,
             Packet::S26MapChunkBulk { .. } => 0x26,
         }
     }

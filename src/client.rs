@@ -228,6 +228,25 @@ impl ClientHandler {
             self.world_gen.request_region(center.x, center.z, 10);
             self.world_gen.await_region(center.x, center.z, 10).await;
             self.send_world(center.x, center.z, 10).await?;
+
+            let min_x = center.x - 10;
+            let min_z = center.z - 10;
+            let max_x = center.x + 10;
+            let max_z = center.z + 10;
+
+            let removed = self
+                .known_chunks
+                .iter()
+                .filter(|k| k.x < min_x || k.z < min_z || k.x > max_x || k.z > max_z)
+                .map(|k| *k)
+                .collect::<Vec<ChunkPos>>();
+
+            for r in removed {
+                self.in_stream
+                    .send(Packet::S21ChunkData { x: r.x, z: r.z })
+                    .await?;
+                self.known_chunks.remove(&r);
+            }
         }
 
         Ok(())

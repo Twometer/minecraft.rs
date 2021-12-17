@@ -248,6 +248,13 @@ impl MinecraftCodec {
                 buf.put_f32(pitch);
                 buf.put_u8(flags);
             }
+            Packet::S21ChunkData { x, z } => {
+                buf.put_i32(x);
+                buf.put_i32(z);
+                buf.put_bool(true);
+                buf.put_u16(0);
+                buf.put_var_int(0);
+            }
             Packet::S26MapChunkBulk { skylight, chunks } => {
                 buf.put_bool(skylight);
                 buf.put_var_int(chunks.len() as i32);
