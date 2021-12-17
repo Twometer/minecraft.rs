@@ -11,13 +11,13 @@ elevation_scale = 0.0012
 elevation_lac = 2.55
 
 temperature_scale = 0.0005
-temperature_lac = 2.3
+temperature_lac = 2.8
 
 moisture_scale = 0.0005
-moisture_lac = 2.3
+moisture_lac = 2.5
 
 river_scale = 0.001
-river_lac = 2
+river_lac = 2.4
 
 # Biome config
 [biomes]
