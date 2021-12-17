@@ -41,7 +41,7 @@ async fn main() -> std::io::Result<()> {
         .as_secs() as u32;
     let gen = Arc::new(WorldGenerator::new(seed, world_gen_conf, world.clone()));
     let sched = GenerationScheduler::new(world.clone(), gen.clone());
-    sched.start(4);
+    sched.start(8);
     sched.request_region(0, 0, 10);
     sched.await_region(0, 0, 10).await;
 

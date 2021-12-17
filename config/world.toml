@@ -1,5 +1,5 @@
 ## World generator config ##
-master_scale = 4.5
+master_scale = 5.5
 ocean_level = 0.02
 
 # Noise config
@@ -7,14 +7,14 @@ octaves = 6
 falloff = 0.3
 
 # Heightmap config
-elevation_scale = 0.001
+elevation_scale = 0.0012
 elevation_lac = 2.55
 
-temperature_scale = 0.0015
-temperature_lac = 2
+temperature_scale = 0.0005
+temperature_lac = 2.3
 
-moisture_scale = 0.001
-moisture_lac = 2
+moisture_scale = 0.0005
+moisture_lac = 2.3
 
 river_scale = 0.001
 river_lac = 2
@@ -83,6 +83,7 @@ river_lac = 2
     scale = -0.5
     layer = "River"
     blocks = [79, 9, 13]
+    sea_level = true
 
     # Land biomes
     [biomes.jungle]
@@ -154,7 +155,7 @@ river_lac = 2
     scale = 0.5
     layer = "Land"
     blocks = [2, 3, 3]
-    features = { wetland = 0.5, lilypads = 0.06, warm_tree = 0.005 }
+    features = { wetland = 0.5, lilypads = 0.06, warm_tree = 0.002 }
 
     [biomes.forest]
     id = 4
@@ -184,7 +185,7 @@ river_lac = 2
     scale = 0.95
     layer = "Land"
     blocks = [2, 3, 3]
-    features = { grass = 0.05, cold_tree = 0.2 }
+    features = { grass = 0.05, cold_tree = 0.03 }
     surface_layer = 78
 
     [biomes.mountains]
@@ -205,4 +206,4 @@ river_lac = 2
     layer = "Land"
     blocks = [1, 1, 1]
     surface_layer = 78
-    features = { icicles = 0.05 }
+    features = { icicles = 0.005 }

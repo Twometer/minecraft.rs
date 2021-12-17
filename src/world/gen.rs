@@ -107,22 +107,37 @@ impl WorldGenerator {
                 }
             }
             "warm_tree" => {
-                for i in 0..4 {
-                    chunk.set_block(x, top_y + i, z, block_state!(17, 0));
-                }
+                Self::gen_tree(chunk, x, top_y, z, 4, block_state!(17, 0));
             }
             "cold_tree" => {
-                for i in 0..4 {
-                    chunk.set_block(x, top_y + i, z, block_state!(17, 1));
-                }
+                Self::gen_tree(chunk, x, top_y, z, 4, block_state!(17, 1));
             }
             "jungle_tree" => {
-                for i in 0..8 {
-                    chunk.set_block(x, top_y + i, z, block_state!(17, 3));
-                }
+                Self::gen_tree(chunk, x, top_y, z, 6, block_state!(17, 3));
             }
             _ => panic!("Unknown feature {}", feature),
         }
+    }
+
+    fn gen_tree(chunk: &mut Chunk, x: i32, y: i32, z: i32, height: i32, trunk_block: u16) {
+        if !Self::check_surroundings(chunk, x, y, z, 2, trunk_block) {
+            for i in 0..height {
+                chunk.set_block(x, y + i, z, trunk_block);
+            }
+        }
+    }
+
+    fn check_surroundings(chunk: &Chunk, x: i32, y: i32, z: i32, r: i32, state: u16) -> bool {
+        for xo in -r..=r {
+            for yo in -r..=r {
+                for zo in -r..=r {
+                    if chunk.get_block(x + xo, y + yo, z + zo) == state {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     fn should_generate(&self, prob: f64) -> bool {
@@ -168,15 +183,15 @@ impl WorldGenerator {
         let elevation =
             self.sample_noise_fractal(x, z, self.config.elevation_scale, self.config.elevation_lac);
         let temperature = self.sample_noise_fractal(
-            x,
+            -x,
             z,
             self.config.temperature_scale,
             self.config.temperature_lac,
         );
         let moisture =
-            self.sample_noise_fractal(x, z, self.config.moisture_scale, self.config.moisture_lac);
+            self.sample_noise_fractal(x, -z, self.config.moisture_scale, self.config.moisture_lac);
         let river = (self
-            .sample_noise_fractal(x, z, self.config.river_scale, self.config.river_lac)
+            .sample_noise_fractal(-x, -z, self.config.river_scale, self.config.river_lac)
             .abs())
             * (elevation + 1.0)
             * 0.5;
