@@ -1,12 +1,9 @@
 ## Server config ##
-motd = "Hello from minecraft.rs"
+motd = "Hello from §6minecraft.rs\n§rpowered by §aT§bo§ck§di§eo"
 slots = 20
-
-[game]
 gamemode = 1
 difficulty = 0
-seed = "noodles"
-
-[network]
-endpoint = "127.0.0.1:25565"
-compression = 256
+net_endpoint = "127.0.0.1:25565"
+net_compression = 256
+generator_threads = 8
+view_dist = 10

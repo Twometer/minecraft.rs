@@ -13,6 +13,7 @@ use tokio::{
 use tokio_util::codec::Framed;
 
 use crate::{
+    config::ServerConfig,
     mc::{codec::MinecraftCodec, proto::Packet, proto::PlayState},
     utils::broadcast_chat,
     world::{sched::GenerationScheduler, Chunk, ChunkPos, MutexChunkRef, World},
@@ -24,6 +25,7 @@ pub struct ClientHandler {
     broadcast: mpsc::Sender<Packet>,
     world: Arc<World>,
     world_gen: Arc<GenerationScheduler>,
+    server_config: Arc<ServerConfig>,
     entity_id: i32,
     username: String,
     known_chunks: DashSet<ChunkPos>,
@@ -37,6 +39,7 @@ impl ClientHandler {
         broadcast: mpsc::Sender<Packet>,
         world: Arc<World>,
         world_gen: Arc<GenerationScheduler>,
+        server_config: Arc<ServerConfig>,
     ) -> ClientHandler {
         ClientHandler {
             in_stream,
@@ -44,6 +47,7 @@ impl ClientHandler {
             broadcast,
             world,
             world_gen,
+            server_config,
             entity_id: 0,
             username: String::new(),
             known_chunks: DashSet::new(),
@@ -120,12 +124,12 @@ impl ClientHandler {
                         "protocol": 47
                     },
                     "players":{
-                        "max": 20,
+                        "max": self.server_config.slots,
                         "online": 0,
                         "sample": []
                     },
                     "description": {
-                        "text": "Hello from §6minecraft.rs §rwith §aT§bo§ck§di§eo"
+                        "text": self.server_config.motd
                     }
                 });
                 self.in_stream
@@ -145,9 +149,13 @@ impl ClientHandler {
 
                 // Enable compression
                 self.in_stream
-                    .send(Packet::S03LoginCompression { threshold: 256 })
+                    .send(Packet::S03LoginCompression {
+                        threshold: self.server_config.net_compression as i32,
+                    })
                     .await?;
-                self.in_stream.codec_mut().change_compression_threshold(256);
+                self.in_stream
+                    .codec_mut()
+                    .change_compression_threshold(self.server_config.net_compression);
 
                 // Enter play state
                 self.in_stream
@@ -162,9 +170,9 @@ impl ClientHandler {
                 self.in_stream
                     .send(Packet::S01JoinGame {
                         entity_id: self.entity_id,
-                        gamemode: 1,
+                        gamemode: self.server_config.gamemode,
                         dimension: 0,
-                        difficulty: 0,
+                        difficulty: self.server_config.difficulty,
                         player_list_size: 4,
                         world_type: "default".to_string(),
                         reduced_debug_info: false,
@@ -172,7 +180,7 @@ impl ClientHandler {
                     .await?;
 
                 // Transmit world
-                self.send_world(0, 0, 10).await?;
+                self.send_world(0, 0, self.server_config.view_dist).await?;
 
                 // Spawn player into world
                 self.in_stream
@@ -225,14 +233,16 @@ impl ClientHandler {
     async fn update_chunks(&mut self, center: ChunkPos) -> std::io::Result<()> {
         if center != self.current_chunk_pos {
             self.current_chunk_pos = center;
-            self.world_gen.request_region(center.x, center.z, 10);
-            self.world_gen.await_region(center.x, center.z, 10).await;
-            self.send_world(center.x, center.z, 10).await?;
 
-            let min_x = center.x - 10;
-            let min_z = center.z - 10;
-            let max_x = center.x + 10;
-            let max_z = center.z + 10;
+            let r = self.server_config.view_dist;
+            self.world_gen.request_region(center.x, center.z, r);
+            self.world_gen.await_region(center.x, center.z, r).await;
+            self.send_world(center.x, center.z, r).await?;
+
+            let min_x = center.x - r;
+            let min_z = center.z - r;
+            let max_x = center.x + r;
+            let max_z = center.z + r;
 
             let removed = self
                 .known_chunks

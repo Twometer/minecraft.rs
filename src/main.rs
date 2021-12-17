@@ -15,7 +15,7 @@ use tokio_util::codec::Framed;
 
 use crate::broker::PacketBroker;
 use crate::client::ClientHandler;
-use crate::config::WorldGenConfig;
+use crate::config::{ServerConfig, WorldGenConfig};
 use crate::mc::{codec::MinecraftCodec, proto::Packet};
 use crate::world::sched::GenerationScheduler;
 use crate::world::{gen::WorldGenerator, World};
@@ -25,8 +25,8 @@ async fn main() -> std::io::Result<()> {
     pretty_env_logger::init();
     info!("Starting server...");
 
-    let listener = TcpListener::bind("127.0.0.1:25565").await?;
-    info!("Listener bound and ready");
+    let server_conf = Arc::new(ServerConfig::load("config/server.toml"));
+    debug!("Loaded config {:?}", server_conf);
 
     let world_gen_conf = WorldGenConfig::load("config/world.toml");
     debug!("Loaded config {:?}", world_gen_conf);
@@ -41,12 +41,15 @@ async fn main() -> std::io::Result<()> {
         .as_secs() as u32;
     let gen = Arc::new(WorldGenerator::new(seed, world_gen_conf, world.clone()));
     let sched = Arc::new(GenerationScheduler::new(world.clone(), gen.clone()));
-    sched.start(8);
-    sched.request_region(0, 0, 10);
-    sched.await_region(0, 0, 10).await;
+    sched.start(server_conf.generator_threads);
+    sched.request_region(0, 0, server_conf.view_dist);
+    sched.await_region(0, 0, server_conf.view_dist).await;
 
     let duration = SystemTime::now().duration_since(start).unwrap();
     info!("Done generating spawn region after {:?}", duration);
+
+    let listener = TcpListener::bind(server_conf.net_endpoint.as_str()).await?;
+    info!("Network listener bound");
 
     let mut broker = PacketBroker::new();
     loop {
@@ -57,6 +60,7 @@ async fn main() -> std::io::Result<()> {
             broker.new_broadcast(),
             world.clone(),
             sched.clone(),
+            server_conf.clone(),
         );
     }
 }
@@ -67,6 +71,7 @@ fn handle_client(
     broadcast: mpsc::Sender<Packet>,
     world: Arc<World>,
     world_gen: Arc<GenerationScheduler>,
+    server_config: Arc<ServerConfig>,
 ) {
     tokio::spawn(async move {
         let client_addr = in_stream.peer_addr().unwrap();
@@ -75,7 +80,14 @@ fn handle_client(
         let codec = MinecraftCodec::new();
         let framed = Framed::new(in_stream, codec);
 
-        let mut handler = ClientHandler::new(framed, out_stream, broadcast, world, world_gen);
+        let mut handler = ClientHandler::new(
+            framed,
+            out_stream,
+            broadcast,
+            world,
+            world_gen,
+            server_config,
+        );
         handler.handle_loop().await;
 
         debug!("Client {:?} disconnected", client_addr);

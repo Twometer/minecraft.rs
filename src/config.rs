@@ -49,3 +49,22 @@ impl WorldGenConfig {
             .expect("Failed to parse world generator config")
     }
 }
+
+#[derive(Debug, Deserialize)]
+pub struct ServerConfig {
+    pub motd: String,
+    pub slots: i32,
+    pub gamemode: u8,
+    pub difficulty: u8,
+    pub net_endpoint: String,
+    pub net_compression: usize,
+    pub generator_threads: u32,
+    pub view_dist: i32,
+}
+
+impl ServerConfig {
+    pub fn load(path: &str) -> ServerConfig {
+        let data = fs::read_to_string(path).expect("Server config not found");
+        toml::from_str::<ServerConfig>(data.as_str()).expect("Failed to parse server config")
+    }
+}
