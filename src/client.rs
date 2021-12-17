@@ -55,7 +55,7 @@ impl ClientHandler {
         }
     }
 
-    pub async fn handle_loop(&mut self) {
+    pub async fn loop_until_disconnect(&mut self) {
         let mut keep_alive_interval = time::interval_at(
             Instant::now().add(Duration::from_secs(5)),
             Duration::from_secs(10),
@@ -180,7 +180,7 @@ impl ClientHandler {
                     .await?;
 
                 // Transmit world
-                self.send_world(0, 0, self.server_config.view_dist).await?;
+                self.send_chunks(0, 0, self.server_config.view_dist).await?;
 
                 // Spawn player into world
                 self.in_stream
@@ -237,7 +237,7 @@ impl ClientHandler {
             let r = self.server_config.view_dist;
             self.world_gen.request_region(center.x, center.z, r);
             self.world_gen.await_region(center.x, center.z, r).await;
-            self.send_world(center.x, center.z, r).await?;
+            self.send_chunks(center.x, center.z, r).await?;
 
             let min_x = center.x - r;
             let min_z = center.z - r;
@@ -262,7 +262,7 @@ impl ClientHandler {
         Ok(())
     }
 
-    async fn send_world(&mut self, center_x: i32, center_z: i32, r: i32) -> std::io::Result<()> {
+    async fn send_chunks(&mut self, center_x: i32, center_z: i32, r: i32) -> std::io::Result<()> {
         let mut chunk_refs = Vec::<MutexChunkRef>::new();
 
         // Collect chunks to be sent

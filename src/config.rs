@@ -60,6 +60,7 @@ pub struct ServerConfig {
     pub net_compression: usize,
     pub generator_threads: u32,
     pub view_dist: i32,
+    pub seed: Option<u32>,
 }
 
 impl ServerConfig {
