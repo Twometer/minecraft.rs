@@ -85,6 +85,10 @@ impl Section {
     }
 
     pub fn set_block(&mut self, x: i32, y: i32, z: i32, block_state: u16) {
+        if x < 0 || y < 0 || z < 0 || x > 15 || y > 15 || z > 15 {
+            return;
+        }
+
         let block_idx = x + 16 * (z + 16 * y);
         self.data[block_idx as usize] = block_state
     }

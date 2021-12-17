@@ -107,22 +107,69 @@ impl WorldGenerator {
                 }
             }
             "warm_tree" => {
-                Self::gen_tree(chunk, x, top_y, z, 4, block_state!(17, 0));
+                Self::gen_tree(
+                    chunk,
+                    x,
+                    top_y,
+                    z,
+                    6,
+                    block_state!(17, 0),
+                    block_state!(18, 0),
+                );
             }
             "cold_tree" => {
-                Self::gen_tree(chunk, x, top_y, z, 4, block_state!(17, 1));
+                Self::gen_tree(
+                    chunk,
+                    x,
+                    top_y,
+                    z,
+                    6,
+                    block_state!(17, 1),
+                    block_state!(18, 1),
+                );
             }
             "jungle_tree" => {
-                Self::gen_tree(chunk, x, top_y, z, 6, block_state!(17, 3));
+                Self::gen_tree(
+                    chunk,
+                    x,
+                    top_y,
+                    z,
+                    9,
+                    block_state!(17, 3),
+                    block_state!(18, 3),
+                );
             }
             _ => panic!("Unknown feature {}", feature),
         }
     }
 
-    fn gen_tree(chunk: &mut Chunk, x: i32, y: i32, z: i32, height: i32, trunk_block: u16) {
+    fn gen_tree(
+        chunk: &mut Chunk,
+        x: i32,
+        y: i32,
+        z: i32,
+        height: i32,
+        trunk_block: u16,
+        leaves_block: u16,
+    ) {
         if !Self::check_surroundings(chunk, x, y, z, 2, trunk_block) {
             for i in 0..height {
-                chunk.set_block(x, y + i, z, trunk_block);
+                if i > height - 5 {
+                    let r = (height - i).min(2);
+                    for xo in -r..=r {
+                        for zo in -r..=r {
+                            if i < height - 2
+                                || xo * xo + zo * zo <= r * r + rand::thread_rng().gen_range(0..1)
+                            {
+                                chunk.set_block(x + xo, y + i, z + zo, leaves_block)
+                            }
+                        }
+                    }
+                }
+
+                if i < height - 2 {
+                    chunk.set_block(x, y + i, z, trunk_block);
+                }
             }
         }
     }
