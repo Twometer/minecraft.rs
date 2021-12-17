@@ -1,5 +1,6 @@
 use std::{ops::Add, sync::Arc, time::Duration};
 
+use dashmap::DashSet;
 use futures::{SinkExt, StreamExt};
 use log::{error, info, trace};
 use serde_json::json;
@@ -14,7 +15,7 @@ use tokio_util::codec::Framed;
 use crate::{
     mc::{codec::MinecraftCodec, proto::Packet, proto::PlayState},
     utils::broadcast_chat,
-    world::{Chunk, ChunkPos, MutexChunkRef, World},
+    world::{sched::GenerationScheduler, Chunk, ChunkPos, MutexChunkRef, World},
 };
 
 pub struct ClientHandler {
@@ -22,8 +23,11 @@ pub struct ClientHandler {
     out_stream: mpsc::Receiver<Packet>,
     broadcast: mpsc::Sender<Packet>,
     world: Arc<World>,
+    world_gen: Arc<GenerationScheduler>,
     entity_id: i32,
     username: String,
+    known_chunks: DashSet<ChunkPos>,
+    current_chunk_pos: ChunkPos,
 }
 
 impl ClientHandler {
@@ -32,14 +36,18 @@ impl ClientHandler {
         out_stream: mpsc::Receiver<Packet>,
         broadcast: mpsc::Sender<Packet>,
         world: Arc<World>,
+        world_gen: Arc<GenerationScheduler>,
     ) -> ClientHandler {
         ClientHandler {
             in_stream,
             out_stream,
             broadcast,
             world,
+            world_gen,
             entity_id: 0,
             username: String::new(),
+            known_chunks: DashSet::new(),
+            current_chunk_pos: ChunkPos::new(0, 0),
         }
     }
 
@@ -164,9 +172,9 @@ impl ClientHandler {
                     .await?;
 
                 // Transmit world
-                self.send_world(-10, -10, 10, 10).await?;
+                self.send_world(0, 0, 10).await?;
 
-                // Spawn playef into world
+                // Spawn player into world
                 self.in_stream
                     .send(Packet::S08SetPlayerPosition {
                         x: 0.0,
@@ -198,6 +206,14 @@ impl ClientHandler {
                 // TODO Sanitize position
                 self.world.set_block(location.x, location.y, location.z, 0);
             }
+            Packet::C04PlayerPos { x, z, .. } => {
+                self.update_chunks(ChunkPos::from_block_pos(x as i32, z as i32))
+                    .await?;
+            }
+            Packet::C06PlayerPosRot { x, z, .. } => {
+                self.update_chunks(ChunkPos::from_block_pos(x as i32, z as i32))
+                    .await?;
+            }
             _ => {
                 trace!("Received unhandled packet: {:?}", packet);
             }
@@ -206,15 +222,28 @@ impl ClientHandler {
         Ok(())
     }
 
-    async fn send_world(&mut self, x0: i32, z0: i32, x1: i32, z1: i32) -> std::io::Result<()> {
+    async fn update_chunks(&mut self, center: ChunkPos) -> std::io::Result<()> {
+        if center != self.current_chunk_pos {
+            self.current_chunk_pos = center;
+            self.world_gen.request_region(center.x, center.z, 10);
+            self.world_gen.await_region(center.x, center.z, 10).await;
+            self.send_world(center.x, center.z, 10).await?;
+        }
+
+        Ok(())
+    }
+
+    async fn send_world(&mut self, center_x: i32, center_z: i32, r: i32) -> std::io::Result<()> {
         let mut chunk_refs = Vec::<MutexChunkRef>::new();
 
         // Collect chunks to be sent
-        for z in z0..=z1 {
-            for x in x0..=x1 {
-                let chunk_opt = self.world.get_chunk(ChunkPos::new(x, z));
-                if chunk_opt.is_some() {
+        for z in -r..=r {
+            for x in -r..=r {
+                let chunk_pos = ChunkPos::new(center_x + x, center_z + z);
+                let chunk_opt = self.world.get_chunk(chunk_pos);
+                if chunk_opt.is_some() && !self.known_chunks.contains(&chunk_pos) {
                     chunk_refs.push(chunk_opt.unwrap());
+                    self.known_chunks.insert(chunk_pos);
                 }
             }
         }

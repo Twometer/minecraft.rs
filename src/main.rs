@@ -40,7 +40,7 @@ async fn main() -> std::io::Result<()> {
         .unwrap()
         .as_secs() as u32;
     let gen = Arc::new(WorldGenerator::new(seed, world_gen_conf, world.clone()));
-    let sched = GenerationScheduler::new(world.clone(), gen.clone());
+    let sched = Arc::new(GenerationScheduler::new(world.clone(), gen.clone()));
     sched.start(8);
     sched.request_region(0, 0, 10);
     sched.await_region(0, 0, 10).await;
@@ -56,6 +56,7 @@ async fn main() -> std::io::Result<()> {
             broker.new_unicast().await,
             broker.new_broadcast(),
             world.clone(),
+            sched.clone(),
         );
     }
 }
@@ -65,6 +66,7 @@ fn handle_client(
     out_stream: mpsc::Receiver<Packet>,
     broadcast: mpsc::Sender<Packet>,
     world: Arc<World>,
+    world_gen: Arc<GenerationScheduler>,
 ) {
     tokio::spawn(async move {
         let client_addr = in_stream.peer_addr().unwrap();
@@ -73,7 +75,7 @@ fn handle_client(
         let codec = MinecraftCodec::new();
         let framed = Framed::new(in_stream, codec);
 
-        let mut handler = ClientHandler::new(framed, out_stream, broadcast, world);
+        let mut handler = ClientHandler::new(framed, out_stream, broadcast, world, world_gen);
         handler.handle_loop().await;
 
         debug!("Client {:?} disconnected", client_addr);

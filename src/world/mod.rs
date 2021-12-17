@@ -51,8 +51,8 @@ impl BlockPos {
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
 pub struct ChunkPos {
-    x: i32,
-    z: i32,
+    pub x: i32,
+    pub z: i32,
 }
 
 impl ChunkPos {
