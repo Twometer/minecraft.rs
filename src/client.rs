@@ -1,4 +1,11 @@
-use std::{ops::Add, sync::Arc, time::Duration};
+use std::{
+    ops::Add,
+    sync::{
+        atomic::{AtomicI32, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 
 use dashmap::DashSet;
 use futures::{SinkExt, StreamExt};
@@ -14,10 +21,16 @@ use tokio_util::codec::Framed;
 
 use crate::{
     config::ServerConfig,
-    mc::{codec::MinecraftCodec, proto::Packet, proto::PlayState},
+    mc::{
+        codec::MinecraftCodec,
+        proto::PlayState,
+        proto::{Packet, Slot},
+    },
     utils::broadcast_chat,
     world::{sched::GenerationScheduler, Chunk, ChunkPos, MutexChunkRef, World},
 };
+
+static EID_COUNTER: AtomicI32 = AtomicI32::new(0);
 
 pub struct ClientHandler {
     in_stream: Framed<TcpStream, MinecraftCodec>,
@@ -167,6 +180,7 @@ impl ClientHandler {
                 self.in_stream.codec_mut().change_state(PlayState::Play);
 
                 // Complete login sequence
+                self.entity_id = EID_COUNTER.fetch_add(1, Ordering::SeqCst);
                 self.in_stream
                     .send(Packet::S01JoinGame {
                         entity_id: self.entity_id,
@@ -210,9 +224,31 @@ impl ClientHandler {
                 info!("Chat message: {}", prepared_message);
                 broadcast_chat(&mut self.broadcast, prepared_message).await;
             }
-            Packet::C07PlayerDigging { location, .. } => {
+            Packet::C07PlayerDigging {
+                location, status, ..
+            } => {
                 // TODO Sanitize position
-                self.world.set_block(location.x, location.y, location.z, 0);
+                if self.server_config.gamemode == 0 {
+                    if status == 2 {
+                        // digging finished?
+                        let block = self.world.get_block(location.x, location.y, location.z);
+                        self.in_stream
+                            .send(Packet::S0ESpawnObject {
+                                entity_id: EID_COUNTER.fetch_add(1, Ordering::SeqCst),
+                                kind: 2,
+                                x: location.x as f32 + 0.5,
+                                y: location.y as f32 + 0.5,
+                                z: location.z as f32 + 0.5,
+                                pitch: 0.0,
+                                yaw: 0.0,
+                                data: 0,
+                            })
+                            .await?;
+                        self.world.set_block(location.x, location.y, location.z, 0);
+                    }
+                } else {
+                    self.world.set_block(location.x, location.y, location.z, 0);
+                }
             }
             Packet::C04PlayerPos { x, z, .. } => {
                 self.update_chunks(ChunkPos::from_block_pos(x as i32, z as i32))

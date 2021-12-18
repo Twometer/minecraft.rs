@@ -1,4 +1,4 @@
-use std::io;
+use std::{f32::consts::PI, io};
 
 use bytes::{Buf, BufMut, BytesMut};
 use log::{debug, trace};
@@ -22,6 +22,7 @@ pub trait MinecraftBufExt {
     fn put_var_int(&mut self, value: i32);
     fn put_string(&mut self, value: &str);
     fn put_bool(&mut self, value: bool);
+    fn put_angle(&mut self, value: f32);
 }
 
 impl MinecraftBufExt for BytesMut {
@@ -80,6 +81,11 @@ impl MinecraftBufExt for BytesMut {
 
     fn put_bool(&mut self, value: bool) {
         self.put_u8(if value { 1 } else { 0 });
+    }
+
+    fn put_angle(&mut self, value: f32) {
+        let scaled = value / (2.0 * PI) * 255.0;
+        self.put_u8(scaled as u8);
     }
 }
 
@@ -298,6 +304,30 @@ impl MinecraftCodec {
 
                 // Copy data buffer to main buffer
                 buf.extend_from_slice(&chunk_buf[..]);
+            }
+            Packet::S0ESpawnObject {
+                entity_id,
+                kind,
+                x,
+                y,
+                z,
+                pitch,
+                yaw,
+                data,
+            } => {
+                buf.put_var_int(entity_id);
+                buf.put_u8(kind);
+                buf.put_i32((x * 32.0) as i32);
+                buf.put_i32((y * 32.0) as i32);
+                buf.put_i32((z * 32.0) as i32);
+                buf.put_angle(pitch);
+                buf.put_angle(yaw);
+
+                buf.put_i32(0);
+                //buf.put_u16(data.id);
+                //buf.put_u8(data.count);
+                //buf.put_u16(data.damage);
+                //buf.put_u8(data.nbt_start);
             }
             _ => panic!("Invalid packet direction!"),
         }

@@ -21,6 +21,14 @@ impl TryFrom<i32> for PlayState {
 }
 
 #[derive(Debug, Clone)]
+pub struct Slot {
+    pub id: u16,
+    pub count: u8,
+    pub damage: u16,
+    pub nbt_start: u8,
+}
+
+#[derive(Debug, Clone)]
 pub enum Packet {
     // State::Handshake
     C00Handshake {
@@ -120,6 +128,16 @@ pub enum Packet {
         skylight: bool,
         chunks: Vec<Chunk>,
     },
+    S0ESpawnObject {
+        entity_id: i32,
+        kind: u8,
+        x: f32,
+        y: f32,
+        z: f32,
+        pitch: f32,
+        yaw: f32,
+        data: i32,
+    },
 }
 
 impl Packet {
@@ -149,6 +167,7 @@ impl Packet {
             Packet::S08SetPlayerPosition { .. } => 0x08,
             Packet::S21ChunkData { .. } => 0x21,
             Packet::S26MapChunkBulk { .. } => 0x26,
+            Packet::S0ESpawnObject { .. } => 0x0E,
         }
     }
 }
