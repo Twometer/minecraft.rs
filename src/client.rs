@@ -21,7 +21,11 @@ use tokio_util::codec::Framed;
 
 use crate::{
     config::ServerConfig,
-    mc::{codec::MinecraftCodec, proto::Packet, proto::PlayState},
+    mc::{
+        codec::MinecraftCodec,
+        proto::PlayState,
+        proto::{AbilityFlags, Packet},
+    },
     utils::broadcast_chat,
     world::{sched::GenerationScheduler, Chunk, ChunkPos, MutexChunkRef, World},
 };
@@ -39,6 +43,9 @@ pub struct ClientHandler {
     username: String,
     known_chunks: DashSet<ChunkPos>,
     current_chunk_pos: ChunkPos,
+    fly_speed: f32,
+    walk_speed: f32,
+    game_mode: u8,
 }
 
 impl ClientHandler {
@@ -50,6 +57,7 @@ impl ClientHandler {
         world_gen: Arc<GenerationScheduler>,
         server_config: Arc<ServerConfig>,
     ) -> ClientHandler {
+        let game_mode = server_config.gamemode;
         ClientHandler {
             in_stream,
             out_stream,
@@ -61,6 +69,9 @@ impl ClientHandler {
             username: String::new(),
             known_chunks: DashSet::new(),
             current_chunk_pos: ChunkPos::new(0, 0),
+            fly_speed: 0.05,
+            walk_speed: 0.1,
+            game_mode,
         }
     }
 
@@ -180,7 +191,7 @@ impl ClientHandler {
                 self.in_stream
                     .send(Packet::S01JoinGame {
                         entity_id: self.entity_id,
-                        gamemode: self.server_config.gamemode,
+                        gamemode: self.game_mode,
                         dimension: 0,
                         difficulty: self.server_config.difficulty,
                         player_list_size: 4,
@@ -216,15 +227,17 @@ impl ClientHandler {
                 .await;
             }
             Packet::C01ChatMessage { message } => {
-                let prepared_message = format!("§b{}§r: {}", self.username, message);
-                info!("Chat message: {}", prepared_message);
-                broadcast_chat(&mut self.broadcast, prepared_message).await;
+                if !self.handle_command(message.as_str()).await {
+                    let prepared_message = format!("§b{}§r: {}", self.username, message);
+                    info!("Chat message: {}", prepared_message);
+                    broadcast_chat(&mut self.broadcast, prepared_message).await;
+                }
             }
             Packet::C07PlayerDigging {
                 location, status, ..
             } => {
                 // TODO Sanitize position
-                if self.server_config.gamemode == 0 {
+                if self.game_mode == 0 {
                     if status == 2 {
                         // digging finished?
                         // let block = self.world.get_block(location.x, location.y, location.z);
@@ -260,6 +273,82 @@ impl ClientHandler {
         }
 
         Ok(())
+    }
+
+    async fn handle_command(&mut self, command: &str) -> bool {
+        if !command.starts_with("/") {
+            return false;
+        }
+
+        let args = &command[1..].split(" ").collect::<Vec<&str>>();
+        let command = args[0];
+        let args = &args[1..];
+
+        match command {
+            "help" => {
+                let help_msg = "§a== Help ==§r\n/gm\n/demo";
+                self.send_chat_message(json!({ "text": help_msg }), 1).await;
+            }
+            "gm" => {
+                self.change_game_mode(args[0].parse::<u8>().unwrap()).await;
+            }
+            "speed" => {
+                let speed_mul = args[0].parse::<f32>().unwrap();
+                self.walk_speed = 0.1 * speed_mul;
+                self.fly_speed = 0.05 * speed_mul;
+                self.send_abilities().await;
+            }
+            "demo" => {
+                self.send_packet(Packet::S2BChangeGameState {
+                    reason: 5,
+                    value: 0.0,
+                })
+                .await;
+            }
+            _ => {
+                let message = format!(
+                    "§cUnknown command '/{}'. §rTry /help for a list of commands.",
+                    command
+                );
+                self.send_chat_message(json!({ "text": message }), 1).await
+            }
+        }
+
+        true
+    }
+
+    async fn change_game_mode(&mut self, gamemode: u8) {
+        self.game_mode = gamemode;
+        self.send_packet(Packet::S2BChangeGameState {
+            reason: 3,
+            value: gamemode as f32,
+        })
+        .await;
+        self.send_abilities().await;
+    }
+
+    async fn send_abilities(&mut self) {
+        self.send_packet(Packet::S39PlayerAbilities {
+            flags: AbilityFlags::from_gamemode(self.game_mode),
+            flying_speed: self.fly_speed,
+            walking_speed: self.walk_speed,
+        })
+        .await;
+    }
+
+    async fn send_chat_message(&mut self, data: serde_json::Value, position: u8) {
+        self.send_packet(Packet::S02ChatMessage {
+            json_data: data.to_string(),
+            position,
+        })
+        .await;
+    }
+
+    async fn send_packet(&mut self, packet: Packet) {
+        self.in_stream
+            .send(packet)
+            .await
+            .expect("Failed to send packet");
     }
 
     async fn update_chunks(&mut self, center: ChunkPos) -> std::io::Result<()> {

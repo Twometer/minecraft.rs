@@ -29,6 +29,39 @@ pub struct Slot {
 }
 
 #[derive(Debug, Clone)]
+pub struct AbilityFlags {
+    pub allow_flying: bool,
+    pub is_creative: bool,
+    pub is_flying: bool,
+    pub god_mode: bool,
+}
+
+impl AbilityFlags {
+    pub fn new(
+        allow_flying: bool,
+        is_creative: bool,
+        is_flying: bool,
+        god_mode: bool,
+    ) -> AbilityFlags {
+        AbilityFlags {
+            allow_flying,
+            is_creative,
+            is_flying,
+            god_mode,
+        }
+    }
+    pub fn from_gamemode(gamemode: u8) -> AbilityFlags {
+        match gamemode {
+            0 => AbilityFlags::new(false, false, false, false), // Survival
+            1 => AbilityFlags::new(true, true, false, true),    // Creative
+            2 => AbilityFlags::new(false, false, false, false), // Adventure
+            3 => AbilityFlags::new(true, false, true, true),    // Spectator
+            _ => panic!("Invalid gamemode {}", gamemode),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub enum Packet {
     // State::Handshake
     C00Handshake {
@@ -138,6 +171,15 @@ pub enum Packet {
         yaw: f32,
         data: i32,
     },
+    S2BChangeGameState {
+        reason: u8,
+        value: f32,
+    },
+    S39PlayerAbilities {
+        flags: AbilityFlags,
+        flying_speed: f32,
+        walking_speed: f32,
+    },
 }
 
 impl Packet {
@@ -168,6 +210,8 @@ impl Packet {
             Packet::S21ChunkData { .. } => 0x21,
             Packet::S26MapChunkBulk { .. } => 0x26,
             Packet::S0ESpawnObject { .. } => 0x0E,
+            Packet::S2BChangeGameState { .. } => 0x2B,
+            Packet::S39PlayerAbilities { .. } => 0x39,
         }
     }
 }

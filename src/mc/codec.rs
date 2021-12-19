@@ -329,6 +329,32 @@ impl MinecraftCodec {
                 //buf.put_u16(data.damage);
                 //buf.put_u8(data.nbt_start);
             }
+            Packet::S2BChangeGameState { reason, value } => {
+                buf.put_u8(reason);
+                buf.put_f32(value);
+            }
+            Packet::S39PlayerAbilities {
+                flags,
+                flying_speed,
+                walking_speed,
+            } => {
+                let mut flags_byte = 0u8;
+                if flags.god_mode {
+                    flags_byte |= 1;
+                }
+                if flags.is_flying {
+                    flags_byte |= 2;
+                }
+                if flags.allow_flying {
+                    flags_byte |= 4;
+                }
+                if flags.is_creative {
+                    flags_byte |= 8;
+                }
+                buf.put_u8(flags_byte);
+                buf.put_f32(flying_speed);
+                buf.put_f32(walking_speed);
+            }
             _ => panic!("Invalid packet direction!"),
         }
     }
