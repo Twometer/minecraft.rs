@@ -21,11 +21,7 @@ use tokio_util::codec::Framed;
 
 use crate::{
     config::ServerConfig,
-    mc::{
-        codec::MinecraftCodec,
-        proto::PlayState,
-        proto::{Packet, Slot},
-    },
+    mc::{codec::MinecraftCodec, proto::Packet, proto::PlayState},
     utils::broadcast_chat,
     world::{sched::GenerationScheduler, Chunk, ChunkPos, MutexChunkRef, World},
 };
@@ -231,7 +227,7 @@ impl ClientHandler {
                 if self.server_config.gamemode == 0 {
                     if status == 2 {
                         // digging finished?
-                        let block = self.world.get_block(location.x, location.y, location.z);
+                        // let block = self.world.get_block(location.x, location.y, location.z);
                         self.in_stream
                             .send(Packet::S0ESpawnObject {
                                 entity_id: EID_COUNTER.fetch_add(1, Ordering::SeqCst),

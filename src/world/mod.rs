@@ -20,6 +20,7 @@ pub struct BlockPos {
     pub z: i32,
 }
 
+#[allow(dead_code)]
 impl BlockPos {
     pub fn new(x: i32, y: i32, z: i32) -> BlockPos {
         BlockPos { x, y, z }
@@ -146,6 +147,7 @@ pub struct World {
     chunks: DashMap<ChunkPos, MutexChunkRef>,
 }
 
+#[allow(dead_code)]
 impl World {
     pub fn new() -> World {
         World {
@@ -169,8 +171,8 @@ impl World {
         (*self.chunks.get(&pos).unwrap()).clone()
     }
 
-    pub fn has_chunk(&self, x: i32, z: i32) -> bool {
-        self.chunks.contains_key(&ChunkPos::new(x, z))
+    pub fn has_chunk(&self, pos: ChunkPos) -> bool {
+        self.chunks.contains_key(&pos)
     }
 
     pub fn insert_chunk(&self, chunk: Chunk) {

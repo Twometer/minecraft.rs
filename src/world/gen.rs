@@ -11,7 +11,7 @@ use crate::{
     world::World,
 };
 
-use super::math::dist;
+use super::{math::dist, ChunkPos};
 
 pub struct WorldGenerator {
     config: WorldGenConfig,
@@ -31,63 +31,70 @@ impl WorldGenerator {
     }
 
     pub fn generate_chunk(&self, chunk_x: i32, chunk_z: i32) {
-        if self.world.has_chunk(chunk_x, chunk_z) {
-            return;
-        }
+        let pos = ChunkPos::new(chunk_x, chunk_z);
 
-        let mut chunk = Chunk::new(chunk_x, chunk_z);
-        let base_x = chunk_x << 4;
-        let base_z = chunk_z << 4;
+        match self.world.get_chunk(pos) {
+            Some(chunk) => {
+                let mut chunk = chunk.lock().unwrap();
+                self.generate_into_chunk(&mut *chunk);
+            }
+            None => {
+                let mut chunk = Chunk::new(chunk_x, chunk_z);
+                self.generate_into_chunk(&mut chunk);
+                self.world.insert_chunk(chunk);
+            }
+        }
+    }
+
+    fn generate_into_chunk(&self, chunk: &mut Chunk) {
+        let base_x = chunk.x << 4;
+        let base_z = chunk.z << 4;
 
         for x in 0..16 {
             for z in 0..16 {
                 let world_x = base_x + x;
                 let world_z = base_z + z;
 
-                let (elevation, biome) = self.sample_biome(world_x, world_z);
-                let interp_scale = self.multi_sample_biome_scale(world_x, world_z, 3);
+                self.generate_column(chunk, x, z, world_x, world_z)
+            }
+        }
+    }
 
-                let noise_val = elevation * interp_scale;
-                let terrain_height = (noise_val * 16.0) as i32 + 64;
-                let generate_height = if biome.sea_level { 64 } else { terrain_height };
-                let top_layer_height = generate_height + 1;
+    fn generate_column(&self, chunk: &mut Chunk, x: i32, z: i32, world_x: i32, world_z: i32) {
+        let (elevation, biome) = self.sample_biome(world_x, world_z);
+        let interp_scale = self.multi_sample_biome_scale(world_x, world_z, 3);
 
-                // Convert heightmap to block
-                for y in 0..=generate_height {
-                    let block_state = self.determine_block(
-                        world_x,
-                        y,
-                        world_z,
-                        terrain_height,
-                        generate_height,
-                        biome,
-                    );
-                    chunk.set_block(x, y, z, block_state);
-                }
+        let noise_val = elevation * interp_scale;
+        let terrain_height = (noise_val * 16.0) as i32 + 64;
+        let generate_height = if biome.sea_level { 64 } else { terrain_height };
+        let top_layer_height = generate_height + 1;
 
-                // Apply surface layer
-                if biome.surface_layer.is_some() {
-                    chunk.set_block(
-                        x,
-                        top_layer_height,
-                        z,
-                        block_state!(biome.surface_layer.unwrap(), 0),
-                    );
-                }
+        // Convert heightmap to block
+        for y in 0..=generate_height {
+            let block_state =
+                self.determine_block(world_x, y, world_z, terrain_height, generate_height, biome);
+            chunk.set_block(x, y, z, block_state);
+        }
 
-                // Generate features
-                for (feature, prob) in &biome.features {
-                    if self.should_generate(*prob) {
-                        self.generate_feature(feature, &mut chunk, x, top_layer_height, z);
-                    }
-                }
+        // Apply surface layer
+        if biome.surface_layer.is_some() {
+            chunk.set_block(
+                x,
+                top_layer_height,
+                z,
+                block_state!(biome.surface_layer.unwrap(), 0),
+            );
+        }
 
-                // Set biome
-                chunk.set_biome(x, z, biome.id);
+        // Generate features
+        for (feature, prob) in &biome.features {
+            if self.should_generate(*prob) {
+                self.generate_feature(feature, chunk, x, top_layer_height, z);
             }
         }
 
-        self.world.insert_chunk(chunk);
+        // Set biome
+        chunk.set_biome(x, z, biome.id);
     }
 
     fn generate_feature(&self, feature: &str, chunk: &mut Chunk, x: i32, top_y: i32, z: i32) {

@@ -323,7 +323,7 @@ impl MinecraftCodec {
                 buf.put_angle(pitch);
                 buf.put_angle(yaw);
 
-                buf.put_i32(0);
+                buf.put_i32(data);
                 //buf.put_u16(data.id);
                 //buf.put_u8(data.count);
                 //buf.put_u16(data.damage);

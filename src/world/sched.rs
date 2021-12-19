@@ -59,11 +59,13 @@ impl GenerationScheduler {
         let mut remaining_chunks = HashSet::<ChunkPos>::new();
         for x in -r..=r {
             for z in -r..=r {
-                if !self.world.has_chunk(x, z) {
-                    remaining_chunks.insert(ChunkPos::new(center_x, center_z));
+                let pos = ChunkPos::new(center_x + x, center_z + z);
+                if !self.world.has_chunk(pos) {
+                    remaining_chunks.insert(pos);
                 }
             }
         }
+
         while !remaining_chunks.is_empty() {
             let generated_chunk = receiver.recv().await.unwrap();
             remaining_chunks.remove(&generated_chunk);
@@ -72,7 +74,7 @@ impl GenerationScheduler {
 
     fn request_chunk(&self, x: i32, z: i32) {
         let pos = ChunkPos::new(x, z);
-        if !self.pending.contains(&pos) && !self.world.has_chunk(x, z) {
+        if !self.pending.contains(&pos) && !self.world.has_chunk(pos) {
             self.pending.insert(pos);
             self.request_tx
                 .send(pos)
