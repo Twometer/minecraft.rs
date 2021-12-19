@@ -13,6 +13,20 @@ macro_rules! block_state {
     };
 }
 
+#[macro_export]
+macro_rules! block_id {
+    ($state: expr) => {
+        (($state) >> 4)
+    };
+}
+
+#[macro_export]
+macro_rules! block_meta {
+    ($state: expr) => {
+        (($state) & 0x0f)
+    };
+}
+
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
 pub struct BlockPos {
     pub x: i32,

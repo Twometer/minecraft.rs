@@ -22,10 +22,11 @@ use tokio_util::codec::Framed;
 use uuid::Uuid;
 
 use crate::{
+    block_id, block_meta,
     config::ServerConfig,
     mc::{
         codec::MinecraftCodec,
-        proto::{AbilityFlags, Packet},
+        proto::{AbilityFlags, EntityMetaData, EntityMetaEntry, Packet},
         proto::{PlayState, PlayerListItemAction},
     },
     utils::broadcast_chat,
@@ -254,11 +255,16 @@ impl ClientHandler {
                 // TODO Sanitize position
                 if self.game_mode == 0 {
                     if status == 2 {
-                        // digging finished?
-                        // let block = self.world.get_block(location.x, location.y, location.z);
+                        // Was digging finished?
+                        let block = self.world.get_block(location.x, location.y, location.z);
+                        let block_id = block_id!(block);
+                        let block_meta = block_meta!(block);
+
+                        // Create item entity
+                        let dropped_item_eid = EID_COUNTER.fetch_add(1, Ordering::SeqCst);
                         self.in_stream
                             .send(Packet::S0ESpawnObject {
-                                entity_id: EID_COUNTER.fetch_add(1, Ordering::SeqCst),
+                                entity_id: dropped_item_eid,
                                 kind: 2,
                                 x: location.x as f32 + 0.5,
                                 y: location.y as f32 + 0.5,
@@ -268,6 +274,23 @@ impl ClientHandler {
                                 data: 0,
                             })
                             .await?;
+
+                        // Set item entity metadata
+                        self.in_stream
+                            .send(Packet::S1CEntityMeta {
+                                entity_id: dropped_item_eid,
+                                entries: vec![EntityMetaEntry::new(
+                                    10,
+                                    EntityMetaData::Slot {
+                                        id: block_id,
+                                        count: 1,
+                                        damage: block_meta,
+                                    },
+                                )],
+                            })
+                            .await?;
+
+                        // Set block in world
                         self.world.set_block(location.x, location.y, location.z, 0);
                     }
                 } else {

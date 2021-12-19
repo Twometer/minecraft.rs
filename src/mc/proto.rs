@@ -20,12 +20,44 @@ impl TryFrom<i32> for PlayState {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
-pub struct Slot {
-    pub id: u16,
-    pub count: u8,
-    pub damage: u16,
-    pub nbt_start: u8,
+pub enum EntityMetaData {
+    Byte(u8),
+    Short(i16),
+    Int(i32),
+    Float(f32),
+    String(String),
+    Slot { id: u16, count: u8, damage: u16 },
+    Vec3i { x: i32, y: i32, z: i32 },
+    Vec3f { x: f32, y: f32, z: f32 },
+}
+
+impl EntityMetaData {
+    pub fn type_id(&self) -> u8 {
+        match self {
+            &EntityMetaData::Byte(_) => 0,
+            &EntityMetaData::Short(_) => 1,
+            &EntityMetaData::Int(_) => 2,
+            &EntityMetaData::Float(_) => 3,
+            &EntityMetaData::String(_) => 4,
+            &EntityMetaData::Slot { .. } => 5,
+            &EntityMetaData::Vec3i { .. } => 6,
+            &EntityMetaData::Vec3f { .. } => 7,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct EntityMetaEntry {
+    pub index: u8,
+    pub data: EntityMetaData,
+}
+
+impl EntityMetaEntry {
+    pub fn new(index: u8, data: EntityMetaData) -> EntityMetaEntry {
+        EntityMetaEntry { index, data }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -204,6 +236,10 @@ pub enum Packet {
         yaw: f32,
         data: i32,
     },
+    S1CEntityMeta {
+        entity_id: i32,
+        entries: Vec<EntityMetaEntry>,
+    },
     S2BChangeGameState {
         reason: u8,
         value: f32,
@@ -222,34 +258,35 @@ pub enum Packet {
 impl Packet {
     pub fn id(&self) -> i32 {
         match self {
-            Packet::C00Handshake { .. } => 0x00,
+            &Packet::C00Handshake { .. } => 0x00,
 
-            Packet::C00StatusRequest { .. } => 0x00,
-            Packet::C01StatusPing { .. } => 0x01,
-            Packet::S00StatusResponse { .. } => 0x00,
-            Packet::S01StatusPong { .. } => 0x01,
+            &Packet::C00StatusRequest { .. } => 0x00,
+            &Packet::C01StatusPing { .. } => 0x01,
+            &Packet::S00StatusResponse { .. } => 0x00,
+            &Packet::S01StatusPong { .. } => 0x01,
 
-            Packet::C00LoginStart { .. } => 0x00,
-            Packet::S02LoginSuccess { .. } => 0x02,
-            Packet::S03LoginCompression { .. } => 0x03,
+            &Packet::C00LoginStart { .. } => 0x00,
+            &Packet::S02LoginSuccess { .. } => 0x02,
+            &Packet::S03LoginCompression { .. } => 0x03,
 
-            Packet::C00KeepAlive { .. } => 0x00,
-            Packet::C01ChatMessage { .. } => 0x01,
-            Packet::C03Player { .. } => 0x03,
-            Packet::C04PlayerPos { .. } => 0x04,
-            Packet::C05PlayerRot { .. } => 0x05,
-            Packet::C06PlayerPosRot { .. } => 0x06,
-            Packet::C07PlayerDigging { .. } => 0x07,
-            Packet::S00KeepAlive { .. } => 0x00,
-            Packet::S01JoinGame { .. } => 0x01,
-            Packet::S02ChatMessage { .. } => 0x02,
-            Packet::S08SetPlayerPosition { .. } => 0x08,
-            Packet::S21ChunkData { .. } => 0x21,
-            Packet::S26MapChunkBulk { .. } => 0x26,
-            Packet::S0ESpawnObject { .. } => 0x0E,
-            Packet::S2BChangeGameState { .. } => 0x2B,
-            Packet::S38PlayerListItem { .. } => 0x38,
-            Packet::S39PlayerAbilities { .. } => 0x39,
+            &Packet::C00KeepAlive { .. } => 0x00,
+            &Packet::C01ChatMessage { .. } => 0x01,
+            &Packet::C03Player { .. } => 0x03,
+            &Packet::C04PlayerPos { .. } => 0x04,
+            &Packet::C05PlayerRot { .. } => 0x05,
+            &Packet::C06PlayerPosRot { .. } => 0x06,
+            &Packet::C07PlayerDigging { .. } => 0x07,
+            &Packet::S00KeepAlive { .. } => 0x00,
+            &Packet::S01JoinGame { .. } => 0x01,
+            &Packet::S02ChatMessage { .. } => 0x02,
+            &Packet::S08SetPlayerPosition { .. } => 0x08,
+            &Packet::S1CEntityMeta { .. } => 0x1C,
+            &Packet::S21ChunkData { .. } => 0x21,
+            &Packet::S26MapChunkBulk { .. } => 0x26,
+            &Packet::S0ESpawnObject { .. } => 0x0E,
+            &Packet::S2BChangeGameState { .. } => 0x2B,
+            &Packet::S38PlayerListItem { .. } => 0x38,
+            &Packet::S39PlayerAbilities { .. } => 0x39,
         }
     }
 }

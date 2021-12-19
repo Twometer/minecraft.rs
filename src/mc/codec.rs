@@ -6,13 +6,11 @@ use tokio_util::codec::{Decoder, Encoder};
 
 use crate::{
     mc::{
-        proto::{Packet, PlayState},
+        proto::{EntityMetaData, Packet, PlayState, PlayerListItemAction},
         zlib,
     },
     world::BlockPos,
 };
-
-use super::proto::PlayerListItemAction;
 
 const PACKET_SIZE_LIMIT: usize = 2 * 1024 * 1024;
 
@@ -324,12 +322,41 @@ impl MinecraftCodec {
                 buf.put_i32((z * 32.0) as i32);
                 buf.put_angle(pitch);
                 buf.put_angle(yaw);
-
                 buf.put_i32(data);
-                //buf.put_u16(data.id);
-                //buf.put_u8(data.count);
-                //buf.put_u16(data.damage);
-                //buf.put_u8(data.nbt_start);
+            }
+            Packet::S1CEntityMeta { entity_id, entries } => {
+                if entries.is_empty() {
+                    panic!("At least one entity meta entry is required!");
+                }
+
+                buf.put_var_int(entity_id);
+                for entry in entries {
+                    buf.put_u8(entry.data.type_id() << 5 | entry.index & 0x1f);
+                    match entry.data {
+                        EntityMetaData::Byte(v) => buf.put_u8(v),
+                        EntityMetaData::Short(v) => buf.put_i16(v),
+                        EntityMetaData::Int(v) => buf.put_i32(v),
+                        EntityMetaData::Float(v) => buf.put_f32(v),
+                        EntityMetaData::String(v) => buf.put_string(v.as_str()),
+                        EntityMetaData::Slot { id, count, damage } => {
+                            buf.put_u16(id);
+                            buf.put_u8(count);
+                            buf.put_u16(damage);
+                            buf.put_u8(0);
+                        }
+                        EntityMetaData::Vec3i { x, y, z } => {
+                            buf.put_i32(x);
+                            buf.put_i32(y);
+                            buf.put_i32(z);
+                        }
+                        EntityMetaData::Vec3f { x, y, z } => {
+                            buf.put_f32(x);
+                            buf.put_f32(y);
+                            buf.put_f32(z);
+                        }
+                    }
+                }
+                buf.put_u8(0x7f);
             }
             Packet::S2BChangeGameState { reason, value } => {
                 buf.put_u8(reason);
