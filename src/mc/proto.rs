@@ -61,6 +61,39 @@ impl AbilityFlags {
     }
 }
 
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub enum PlayerListItemAction {
+    AddPlayer {
+        name: String,
+        gamemode: i32,
+        ping: i32,
+        display_name: Option<String>,
+    },
+    UpdateGameMode {
+        gamemode: i32,
+    },
+    UpdateLatency {
+        ping: i32,
+    },
+    UpdateDisplayName {
+        display_name: Option<String>,
+    },
+    RemovePlayer,
+}
+
+impl PlayerListItemAction {
+    pub fn id(&self) -> i32 {
+        match self {
+            Self::AddPlayer { .. } => 0,
+            Self::UpdateGameMode { .. } => 1,
+            Self::UpdateLatency { .. } => 2,
+            Self::UpdateDisplayName { .. } => 3,
+            Self::RemovePlayer { .. } => 4,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Packet {
     // State::Handshake
@@ -175,6 +208,10 @@ pub enum Packet {
         reason: u8,
         value: f32,
     },
+    S38PlayerListItem {
+        uuid: uuid::Uuid,
+        action: PlayerListItemAction,
+    },
     S39PlayerAbilities {
         flags: AbilityFlags,
         flying_speed: f32,
@@ -211,6 +248,7 @@ impl Packet {
             Packet::S26MapChunkBulk { .. } => 0x26,
             Packet::S0ESpawnObject { .. } => 0x0E,
             Packet::S2BChangeGameState { .. } => 0x2B,
+            Packet::S38PlayerListItem { .. } => 0x38,
             Packet::S39PlayerAbilities { .. } => 0x39,
         }
     }

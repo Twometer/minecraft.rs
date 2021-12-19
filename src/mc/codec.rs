@@ -12,6 +12,8 @@ use crate::{
     world::BlockPos,
 };
 
+use super::proto::PlayerListItemAction;
+
 const PACKET_SIZE_LIMIT: usize = 2 * 1024 * 1024;
 
 pub trait MinecraftBufExt {
@@ -332,6 +334,41 @@ impl MinecraftCodec {
             Packet::S2BChangeGameState { reason, value } => {
                 buf.put_u8(reason);
                 buf.put_f32(value);
+            }
+            Packet::S38PlayerListItem { uuid, action } => {
+                buf.put_var_int(action.id());
+                buf.put_var_int(1);
+                buf.put_u128(uuid.as_u128());
+                match action {
+                    PlayerListItemAction::AddPlayer {
+                        name,
+                        gamemode,
+                        ping,
+                        display_name,
+                    } => {
+                        buf.put_string(name.as_str());
+                        buf.put_var_int(0);
+                        buf.put_var_int(gamemode);
+                        buf.put_var_int(ping);
+                        buf.put_bool(display_name.is_some());
+                        if display_name.is_some() {
+                            buf.put_string(display_name.unwrap().as_str());
+                        }
+                    }
+                    PlayerListItemAction::UpdateGameMode { gamemode } => {
+                        buf.put_var_int(gamemode);
+                    }
+                    PlayerListItemAction::UpdateLatency { ping } => {
+                        buf.put_var_int(ping);
+                    }
+                    PlayerListItemAction::UpdateDisplayName { display_name } => {
+                        buf.put_bool(display_name.is_some());
+                        if display_name.is_some() {
+                            buf.put_string(display_name.unwrap().as_str());
+                        }
+                    }
+                    PlayerListItemAction::RemovePlayer { .. } => {}
+                }
             }
             Packet::S39PlayerAbilities {
                 flags,

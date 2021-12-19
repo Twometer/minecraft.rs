@@ -10,6 +10,7 @@ use std::{
 use dashmap::DashSet;
 use futures::{SinkExt, StreamExt};
 use log::{error, info, trace};
+use rand::Rng;
 use serde_json::json;
 use tokio::{
     net::TcpStream,
@@ -18,13 +19,14 @@ use tokio::{
     time::{self, Instant},
 };
 use tokio_util::codec::Framed;
+use uuid::Uuid;
 
 use crate::{
     config::ServerConfig,
     mc::{
         codec::MinecraftCodec,
-        proto::PlayState,
         proto::{AbilityFlags, Packet},
+        proto::{PlayState, PlayerListItemAction},
     },
     utils::broadcast_chat,
     world::{sched::GenerationScheduler, Chunk, ChunkPos, MutexChunkRef, World},
@@ -46,6 +48,7 @@ pub struct ClientHandler {
     fly_speed: f32,
     walk_speed: f32,
     game_mode: u8,
+    player_uuid: Uuid,
 }
 
 impl ClientHandler {
@@ -57,6 +60,7 @@ impl ClientHandler {
         world_gen: Arc<GenerationScheduler>,
         server_config: Arc<ServerConfig>,
     ) -> ClientHandler {
+        let rand: u128 = rand::thread_rng().gen();
         let game_mode = server_config.gamemode;
         ClientHandler {
             in_stream,
@@ -72,6 +76,7 @@ impl ClientHandler {
             fly_speed: 0.05,
             walk_speed: 0.1,
             game_mode,
+            player_uuid: Uuid::from_u128(rand),
         }
     }
 
@@ -180,7 +185,7 @@ impl ClientHandler {
                 // Enter play state
                 self.in_stream
                     .send(Packet::S02LoginSuccess {
-                        uuid: "3b9f9997-d547-4f70-a37c-8fffbe706002".to_string(),
+                        uuid: self.player_uuid.to_string(),
                         username: self.username.clone(),
                     })
                     .await?;
@@ -224,6 +229,16 @@ impl ClientHandler {
                     &mut self.broadcast,
                     format!("§e{} joined the game", self.username),
                 )
+                .await;
+                self.send_broadcast(Packet::S38PlayerListItem {
+                    uuid: self.player_uuid,
+                    action: PlayerListItemAction::AddPlayer {
+                        name: self.username.clone(),
+                        gamemode: self.game_mode as i32,
+                        display_name: None,
+                        ping: 0,
+                    },
+                })
                 .await;
             }
             Packet::C01ChatMessage { message } => {
@@ -325,6 +340,20 @@ impl ClientHandler {
         })
         .await;
         self.send_abilities().await;
+        self.send_broadcast(Packet::S38PlayerListItem {
+            uuid: self.player_uuid,
+            action: PlayerListItemAction::UpdateGameMode {
+                gamemode: self.game_mode as i32,
+            },
+        })
+        .await;
+    }
+
+    async fn send_broadcast(&self, packet: Packet) {
+        self.broadcast
+            .send(packet)
+            .await
+            .expect("Failed to send broadcast");
     }
 
     async fn send_abilities(&mut self) {
