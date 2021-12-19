@@ -48,6 +48,10 @@ pub struct WorldGenConfig {
     pub moisture_lac: f64,
     pub river_scale: f64,
     pub river_lac: f64,
+    pub cave_scale: f64,
+    pub cave_lac: f64,
+    pub cave_grad_base: f64,
+    pub cave_grad_scale: f64,
     pub biomes: HashMap<String, BiomeConfig>,
     pub ores: HashMap<String, OreConfig>,
 }

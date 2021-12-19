@@ -67,13 +67,23 @@ impl WorldGenerator {
         let noise_val = elevation * interp_scale;
         let terrain_height = (noise_val * 16.0) as i32 + 64;
         let generate_height = if biome.sea_level { 64 } else { terrain_height };
-        let top_layer_height = generate_height + 1;
+        let mut top_layer_height = 0;
+        let mut top_layer_state = 0;
 
-        // Convert heightmap to block
+        // Convert heightmap to blocks
         for y in 0..=generate_height {
             let block_state =
                 self.determine_block(world_x, y, world_z, terrain_height, generate_height, biome);
-            chunk.set_block(x, y, z, block_state);
+
+            if block_state != 0 {
+                top_layer_height = y + 1;
+                top_layer_state = block_state;
+                chunk.set_block(x, y, z, block_state);
+            }
+        }
+
+        if top_layer_state == block_state!(3, 0) {
+            chunk.set_block(x, top_layer_height, z, block_state!(2, 0));
         }
 
         // Apply surface layer
@@ -100,28 +110,28 @@ impl WorldGenerator {
     fn generate_feature(&self, feature: &str, chunk: &mut Chunk, x: i32, top_y: i32, z: i32) {
         match feature {
             "grass" => {
-                chunk.set_block(x, top_y, z, block_state!(31, 1));
+                chunk.set_block_if_air(x, top_y, z, block_state!(31, 1));
             }
             "fern" => {
-                chunk.set_block(x, top_y, z, block_state!(31, 2));
+                chunk.set_block_if_air(x, top_y, z, block_state!(31, 2));
             }
             "bushes" => {
-                chunk.set_block(x, top_y, z, block_state!(18, 3));
+                chunk.set_block_if_air(x, top_y, z, block_state!(18, 3));
             }
             "dead_bushes" => {
-                chunk.set_block(x, top_y, z, block_state!(32, 0));
+                chunk.set_block_if_air(x, top_y, z, block_state!(32, 0));
             }
             "flowers" => {
-                chunk.set_block(x, top_y, z, block_state!(38, 0));
+                chunk.set_block_if_air(x, top_y, z, block_state!(38, 0));
             }
             "mushrooms" => {
-                chunk.set_block(x, top_y, z, block_state!(39, 0));
+                chunk.set_block_if_air(x, top_y, z, block_state!(39, 0));
             }
             "puddles" => {
                 chunk.set_block(x, top_y - 1, z, block_state!(9, 0));
             }
             "lilypads" => {
-                chunk.set_block(x, top_y, z, block_state!(111, 0));
+                chunk.set_block_if_air(x, top_y, z, block_state!(111, 0));
             }
             "boulders" => {
                 chunk.set_block(x, top_y - 1, z, block_state!(1, 5));
@@ -137,7 +147,7 @@ impl WorldGenerator {
                 }
             }
             "warm_tree" => {
-                Self::gen_tree(
+                Self::generate_tree(
                     chunk,
                     x,
                     top_y,
@@ -148,7 +158,7 @@ impl WorldGenerator {
                 );
             }
             "cold_tree" => {
-                Self::gen_tree(
+                Self::generate_tree(
                     chunk,
                     x,
                     top_y,
@@ -159,7 +169,7 @@ impl WorldGenerator {
                 );
             }
             "jungle_tree" => {
-                Self::gen_tree(
+                Self::generate_tree(
                     chunk,
                     x,
                     top_y,
@@ -173,7 +183,7 @@ impl WorldGenerator {
         }
     }
 
-    fn gen_tree(
+    fn generate_tree(
         chunk: &mut Chunk,
         x: i32,
         y: i32,
@@ -245,6 +255,27 @@ impl WorldGenerator {
         block_state!(1, 0)
     }
 
+    fn is_cave(&self, world_x: i32, y: i32, world_z: i32, h: i32) -> bool {
+        let n1 = self.sample_noise_fractal_3d(
+            world_x,
+            y,
+            world_z,
+            self.config.cave_scale,
+            self.config.cave_lac,
+        );
+        let n2 = self.sample_noise_fractal_3d(
+            world_x + 1024,
+            y,
+            world_z + 1024,
+            self.config.cave_scale,
+            self.config.cave_lac,
+        );
+
+        let height_gradient = (y as f64) / (h as f64); // [0..1]
+        let cave_th = self.config.cave_grad_base + height_gradient * self.config.cave_grad_scale;
+        n1 > cave_th && n2 > cave_th
+    }
+
     fn determine_block(
         &self,
         x: i32,
@@ -254,20 +285,45 @@ impl WorldGenerator {
         gh: i32,
         biome: &BiomeConfig,
     ) -> u16 {
+        let is_cave = y <= th && self.is_cave(x, y, z, th);
+        let cave_block = if is_cave && y <= 8 {
+            11
+        } else if is_cave {
+            0
+        } else {
+            1
+        };
+
         if y == gh {
-            block_state!(biome.blocks[0], 0)
+            if is_cave && !biome.sea_level {
+                block_state!(cave_block, 0)
+            } else {
+                block_state!(biome.blocks[0], 0)
+            }
         } else if y >= th {
-            block_state!(biome.blocks[1], 0)
+            if is_cave && !biome.sea_level {
+                block_state!(cave_block, 0)
+            } else {
+                block_state!(biome.blocks[1], 0)
+            }
         } else if y >= th - 3 {
-            block_state!(biome.blocks[2], 0)
+            if is_cave && !biome.sea_level {
+                block_state!(cave_block, 0)
+            } else {
+                block_state!(biome.blocks[2], 0)
+            }
         } else if y > 3 {
-            self.determine_block_underground(x, y, z)
+            if is_cave {
+                block_state!(cave_block, 0)
+            } else {
+                self.determine_block_underground(x, y, z)
+            }
         } else if y > 0 {
             block_state!(
                 if rand::thread_rng().gen_bool(0.5) {
                     7
                 } else {
-                    1
+                    cave_block
                 },
                 0
             )
@@ -357,6 +413,25 @@ impl WorldGenerator {
         let mut amplitude = 1.0;
         for _ in 0..self.config.octaves {
             result += amplitude * self.noise.get([x as f64 * scale, z as f64 * scale]);
+            denom += amplitude;
+
+            scale *= lac;
+            amplitude *= self.config.falloff;
+        }
+
+        result / denom
+    }
+
+    fn sample_noise_fractal_3d(&self, x: i32, y: i32, z: i32, mut scale: f64, lac: f64) -> f64 {
+        let mut result = 0.0;
+        let mut denom = 0.0;
+
+        let mut amplitude = 1.0;
+        for _ in 0..3 {
+            result += amplitude
+                * self
+                    .noise
+                    .get([x as f64 * scale, y as f64 * scale, z as f64 * scale]);
             denom += amplitude;
 
             scale *= lac;

@@ -10,7 +10,7 @@ A high-performance Minecraft server in Rust
     -   [x] Configurable biome generation
     -   [x] Configurable ore generation
     -   [ ] Structure generation
-    -   [ ] Cave generation
+    -   [x] Cave generation
 -   [ ] Basic Minecraft features
     -   [ ] Synchronize player movement and block interaction
     -   [ ] Inventory & crafting system

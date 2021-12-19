@@ -122,6 +122,25 @@ impl Chunk {
         }
     }
 
+    pub fn set_block_if_air(&mut self, x: i32, y: i32, z: i32, block_state: u16) {
+        let section_idx = y >> 4;
+        let mut section_opt = &mut self.sections[section_idx as usize];
+        if section_opt.is_none() {
+            self.sections[section_idx as usize] = Some(Section::new());
+            section_opt = &mut self.sections[section_idx as usize];
+            section_opt
+                .as_mut()
+                .unwrap()
+                .set_block(x, y & 0x0f, z, block_state);
+            return;
+        }
+
+        let section = section_opt.as_mut().unwrap();
+        if section.get_block(x, y & 0x0f, z) == 0 {
+            section.set_block(x, y & 0x0f, z, block_state);
+        }
+    }
+
     pub fn set_block(&mut self, x: i32, y: i32, z: i32, block_state: u16) {
         let section_idx = y >> 4;
         let mut section_opt = &mut self.sections[section_idx as usize];

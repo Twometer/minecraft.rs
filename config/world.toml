@@ -19,6 +19,11 @@ moisture_lac = 2.5
 river_scale = 0.001
 river_lac = 2.4
 
+cave_scale = 0.05
+cave_lac = 1.25
+cave_grad_base = 0.05
+cave_grad_scale = 0.185
+
 # Biome config
 [biomes]
     # Sea biomes
@@ -236,14 +241,14 @@ river_lac = 2.4
     center = 0
     spread = 14
     scale = 0.2
-    threshold = 0.75
+    threshold = 0.79
 
     [ores.redstone]
     id = 73
     center = 0
     spread = 20
     scale = 0.1
-    threshold = 0.8
+    threshold = 0.7
 
     [ores.lapis]
     id = 21
