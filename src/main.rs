@@ -1,5 +1,6 @@
 mod broker;
 mod client;
+mod command;
 mod config;
 mod mc;
 mod utils;

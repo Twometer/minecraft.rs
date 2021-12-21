@@ -9,6 +9,7 @@ use std::{
 
 use dashmap::DashSet;
 use futures::{SinkExt, StreamExt};
+use indoc::indoc;
 use log::{error, info, trace};
 use rand::Rng;
 use serde_json::json;
@@ -23,6 +24,7 @@ use uuid::Uuid;
 
 use crate::{
     block_id, block_meta,
+    command::Command,
     config::ServerConfig,
     mc::{
         codec::MinecraftCodec,
@@ -243,10 +245,14 @@ impl ClientHandler {
                 .await;
             }
             Packet::C01ChatMessage { message } => {
-                if !self.handle_command(message.as_str()).await {
-                    let prepared_message = format!("§b{}§r: {}", self.username, message);
-                    info!("Chat message: {}", prepared_message);
-                    broadcast_chat(&mut self.broadcast, prepared_message).await;
+                let message = message.as_str();
+                if message.starts_with("/") {
+                    self.handle_command(message).await;
+                } else {
+                    info!("Chat message: <{}> {}", self.username, message);
+
+                    let formatted_message = format!("§b{}§r: {}", self.username, message);
+                    broadcast_chat(&mut self.broadcast, formatted_message).await;
                 }
             }
             Packet::C07PlayerDigging {
@@ -313,46 +319,35 @@ impl ClientHandler {
         Ok(())
     }
 
-    async fn handle_command(&mut self, command: &str) -> bool {
-        if !command.starts_with("/") {
-            return false;
+    async fn handle_command(&mut self, command: &str) {
+        let result = self.process_command(command).await;
+        let message_opt = match result {
+            Ok(str) => str,
+            Err(str) => Some(format!("§cError: {}", str)),
+        };
+        if message_opt.is_some() {
+            self.send_chat_message(json!({"text": message_opt.unwrap()}), 1)
+                .await;
         }
+    }
 
-        let args = &command[1..].split(" ").collect::<Vec<&str>>();
-        let command = args[0];
-        let args = &args[1..];
-
-        match command {
+    async fn process_command(&mut self, command: &str) -> Result<Option<String>, String> {
+        let command = Command::parse(command);
+        match command.name() {
             "help" => {
-                let help_msg = "§a== Help ==§r\n/gm\n/demo";
-                self.send_chat_message(json!({ "text": help_msg }), 1).await;
+                let help_msg = indoc! {"
+                == §aHelp§r ==
+                §9 /help§r: Show command overview
+                §9 /gm §7<mode>§r: Change gamemode
+                "};
+                return Ok(Some(help_msg.trim().to_string()));
             }
             "gm" => {
-                self.change_game_mode(args[0].parse::<u8>().unwrap()).await;
+                self.change_game_mode(command.arg::<u8>(0)?).await;
             }
-            "speed" => {
-                let speed_mul = args[0].parse::<f32>().unwrap();
-                self.walk_speed = 0.1 * speed_mul;
-                self.fly_speed = 0.05 * speed_mul;
-                self.send_abilities().await;
-            }
-            "demo" => {
-                self.send_packet(Packet::S2BChangeGameState {
-                    reason: 5,
-                    value: 0.0,
-                })
-                .await;
-            }
-            _ => {
-                let message = format!(
-                    "§cUnknown command '/{}'. §rTry /help for a list of commands.",
-                    command
-                );
-                self.send_chat_message(json!({ "text": message }), 1).await
-            }
+            _ => return Err(format!("{}: Unknown command.", command.name())),
         }
-
-        true
+        Ok(None)
     }
 
     async fn change_game_mode(&mut self, gamemode: u8) {
