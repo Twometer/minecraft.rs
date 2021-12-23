@@ -2,7 +2,10 @@ pub mod gen;
 mod math;
 pub mod sched;
 
-use std::sync::{Arc, Mutex};
+use std::{
+    sync::{Arc, Mutex},
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use dashmap::DashMap;
 
@@ -40,14 +43,6 @@ impl BlockPos {
         BlockPos { x, y, z }
     }
 
-    pub fn from_u64(serialized: u64) -> BlockPos {
-        BlockPos {
-            x: Self::to_signed(serialized >> 38, 26),
-            y: Self::to_signed((serialized >> 26) & 0xFFF, 12),
-            z: Self::to_signed(serialized << 38 >> 38, 26),
-        }
-    }
-
     pub fn to_u64(&self) -> u64 {
         let x = self.x as u64;
         let y = self.y as u64;
@@ -61,6 +56,16 @@ impl BlockPos {
             val -= i32::pow(2, bits);
         }
         val
+    }
+}
+
+impl From<u64> for BlockPos {
+    fn from(value: u64) -> Self {
+        BlockPos {
+            x: Self::to_signed(value >> 38, 26),
+            y: Self::to_signed((value >> 26) & 0xFFF, 12),
+            z: Self::to_signed(value << 38 >> 38, 26),
+        }
     }
 }
 
@@ -228,4 +233,11 @@ impl World {
             .unwrap()
             .set_block(x & 0x0f, y, z & 0x0f, block_state);
     }
+}
+
+pub fn random_seed() -> u32 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as u32
 }

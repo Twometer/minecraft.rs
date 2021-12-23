@@ -1,7 +1,7 @@
 ## Server config ##
 motd = "Hello from §6minecraft.rs\n§rpowered by §aT§bo§ck§di§eo"
 slots = 20
-gamemode = 1
+game_mode = "Creative"
 difficulty = 0
 net_endpoint = "127.0.0.1:25565"
 net_compression = 256

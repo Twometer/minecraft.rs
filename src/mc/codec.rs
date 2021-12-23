@@ -12,6 +12,8 @@ use crate::{
     world::BlockPos,
 };
 
+use super::proto::DiggingStatus;
+
 const PACKET_SIZE_LIMIT: usize = 2 * 1024 * 1024;
 
 pub trait MinecraftBufExt {
@@ -197,8 +199,8 @@ impl MinecraftCodec {
                 on_ground: buf.get_bool(),
             }),
             0x07 => Some(Packet::C07PlayerDigging {
-                status: buf.get_u8(),
-                location: BlockPos::from_u64(buf.get_u64()),
+                status: DiggingStatus::from(buf.get_u8()),
+                location: BlockPos::from(buf.get_u64()),
                 face: buf.get_u8(),
             }),
             _ => None,
@@ -217,7 +219,7 @@ impl MinecraftCodec {
             Packet::S00KeepAlive { timestamp } => buf.put_var_int(timestamp),
             Packet::S01JoinGame {
                 entity_id,
-                gamemode,
+                game_mode,
                 dimension,
                 difficulty,
                 player_list_size,
@@ -225,7 +227,7 @@ impl MinecraftCodec {
                 reduced_debug_info,
             } => {
                 buf.put_i32(entity_id);
-                buf.put_u8(gamemode);
+                buf.put_u8(game_mode as u8);
                 buf.put_u8(dimension);
                 buf.put_u8(difficulty);
                 buf.put_u8(player_list_size);
@@ -359,7 +361,7 @@ impl MinecraftCodec {
                 buf.put_u8(0x7f);
             }
             Packet::S2BChangeGameState { reason, value } => {
-                buf.put_u8(reason);
+                buf.put_u8(reason as u8);
                 buf.put_f32(value);
             }
             Packet::S38PlayerListItem { uuid, action } => {
@@ -369,21 +371,21 @@ impl MinecraftCodec {
                 match action {
                     PlayerListItemAction::AddPlayer {
                         name,
-                        gamemode,
+                        game_mode,
                         ping,
                         display_name,
                     } => {
                         buf.put_string(name.as_str());
                         buf.put_var_int(0);
-                        buf.put_var_int(gamemode);
+                        buf.put_var_int(game_mode as i32);
                         buf.put_var_int(ping);
                         buf.put_bool(display_name.is_some());
                         if display_name.is_some() {
                             buf.put_string(display_name.unwrap().as_str());
                         }
                     }
-                    PlayerListItemAction::UpdateGameMode { gamemode } => {
-                        buf.put_var_int(gamemode);
+                    PlayerListItemAction::UpdateGameMode { game_mode } => {
+                        buf.put_var_int(game_mode as i32);
                     }
                     PlayerListItemAction::UpdateLatency { ping } => {
                         buf.put_var_int(ping);

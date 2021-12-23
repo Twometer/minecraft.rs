@@ -2,6 +2,8 @@ use std::{collections::HashMap, fs};
 
 use serde_derive::Deserialize;
 
+use crate::model::GameMode;
+
 #[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq)]
 pub enum BiomeLayer {
     Sea,
@@ -68,7 +70,7 @@ impl WorldGenConfig {
 pub struct ServerConfig {
     pub motd: String,
     pub slots: i32,
-    pub gamemode: u8,
+    pub game_mode: GameMode,
     pub difficulty: u8,
     pub net_endpoint: String,
     pub net_compression: usize,

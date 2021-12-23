@@ -1,9 +1,6 @@
 use std::{
     ops::Add,
-    sync::{
-        atomic::{AtomicI32, Ordering},
-        Arc,
-    },
+    sync::atomic::{AtomicI32, Ordering},
     time::Duration,
 };
 
@@ -25,14 +22,16 @@ use uuid::Uuid;
 use crate::{
     block_id, block_meta,
     command::Command,
-    config::ServerConfig,
     mc::{
         codec::MinecraftCodec,
-        proto::{AbilityFlags, EntityMetaData, EntityMetaEntry, Packet},
+        proto::{
+            AbilityFlags, DiggingStatus, EntityMetaData, EntityMetaEntry, GameStateReason, Packet,
+        },
         proto::{PlayState, PlayerListItemAction},
     },
+    model::{GameMode, Server},
     utils::broadcast_chat,
-    world::{sched::GenerationScheduler, Chunk, ChunkPos, MutexChunkRef, World},
+    world::{Chunk, ChunkPos, MutexChunkRef},
 };
 
 static EID_COUNTER: AtomicI32 = AtomicI32::new(0);
@@ -41,16 +40,14 @@ pub struct ClientHandler {
     in_stream: Framed<TcpStream, MinecraftCodec>,
     out_stream: mpsc::Receiver<Packet>,
     broadcast: mpsc::Sender<Packet>,
-    world: Arc<World>,
-    world_gen: Arc<GenerationScheduler>,
-    server_config: Arc<ServerConfig>,
+    server: Server,
     entity_id: i32,
     username: String,
     known_chunks: DashSet<ChunkPos>,
     current_chunk_pos: ChunkPos,
     fly_speed: f32,
     walk_speed: f32,
-    game_mode: u8,
+    game_mode: GameMode,
     player_uuid: Uuid,
 }
 
@@ -59,19 +56,14 @@ impl ClientHandler {
         in_stream: Framed<TcpStream, MinecraftCodec>,
         out_stream: mpsc::Receiver<Packet>,
         broadcast: mpsc::Sender<Packet>,
-        world: Arc<World>,
-        world_gen: Arc<GenerationScheduler>,
-        server_config: Arc<ServerConfig>,
+        server: Server,
     ) -> ClientHandler {
-        let rand: u128 = rand::thread_rng().gen();
-        let game_mode = server_config.gamemode;
+        let game_mode = server.config.game_mode;
         ClientHandler {
             in_stream,
             out_stream,
             broadcast,
-            world,
-            world_gen,
-            server_config,
+            server,
             entity_id: 0,
             username: String::new(),
             known_chunks: DashSet::new(),
@@ -79,7 +71,7 @@ impl ClientHandler {
             fly_speed: 0.05,
             walk_speed: 0.1,
             game_mode,
-            player_uuid: Uuid::from_u128(rand),
+            player_uuid: Uuid::from_u128(rand::thread_rng().gen()),
         }
     }
 
@@ -152,12 +144,12 @@ impl ClientHandler {
                         "protocol": 47
                     },
                     "players":{
-                        "max": self.server_config.slots,
+                        "max": self.server.config.slots,
                         "online": 0,
                         "sample": []
                     },
                     "description": {
-                        "text": self.server_config.motd
+                        "text": self.server.config.motd
                     }
                 });
                 self.in_stream
@@ -178,12 +170,12 @@ impl ClientHandler {
                 // Enable compression
                 self.in_stream
                     .send(Packet::S03LoginCompression {
-                        threshold: self.server_config.net_compression as i32,
+                        threshold: self.server.config.net_compression as i32,
                     })
                     .await?;
                 self.in_stream
                     .codec_mut()
-                    .change_compression_threshold(self.server_config.net_compression);
+                    .change_compression_threshold(self.server.config.net_compression);
 
                 // Enter play state
                 self.in_stream
@@ -199,9 +191,9 @@ impl ClientHandler {
                 self.in_stream
                     .send(Packet::S01JoinGame {
                         entity_id: self.entity_id,
-                        gamemode: self.game_mode,
+                        game_mode: self.game_mode,
                         dimension: 0,
-                        difficulty: self.server_config.difficulty,
+                        difficulty: self.server.config.difficulty,
                         player_list_size: 4,
                         world_type: "default".to_string(),
                         reduced_debug_info: false,
@@ -209,7 +201,7 @@ impl ClientHandler {
                     .await?;
 
                 // Transmit world
-                self.send_chunks(0, 0, self.server_config.view_dist).await?;
+                self.send_chunks(0, 0, self.server.config.view_dist).await?;
 
                 // Spawn player into world
                 self.in_stream
@@ -237,7 +229,7 @@ impl ClientHandler {
                     uuid: self.player_uuid,
                     action: PlayerListItemAction::AddPlayer {
                         name: self.username.clone(),
-                        gamemode: self.game_mode as i32,
+                        game_mode: self.game_mode,
                         display_name: None,
                         ping: 0,
                     },
@@ -259,10 +251,12 @@ impl ClientHandler {
                 location, status, ..
             } => {
                 // TODO Sanitize position
-                if self.game_mode == 0 {
-                    if status == 2 {
-                        // Was digging finished?
-                        let block = self.world.get_block(location.x, location.y, location.z);
+                if self.game_mode == GameMode::Survival {
+                    if status == DiggingStatus::FinishDigging {
+                        let block = self
+                            .server
+                            .world
+                            .get_block(location.x, location.y, location.z);
                         let block_id = block_id!(block);
                         let block_meta = block_meta!(block);
 
@@ -297,10 +291,14 @@ impl ClientHandler {
                             .await?;
 
                         // Set block in world
-                        self.world.set_block(location.x, location.y, location.z, 0);
+                        self.server
+                            .world
+                            .set_block(location.x, location.y, location.z, 0);
                     }
                 } else {
-                    self.world.set_block(location.x, location.y, location.z, 0);
+                    self.server
+                        .world
+                        .set_block(location.x, location.y, location.z, 0);
                 }
             }
             Packet::C04PlayerPos { x, z, .. } => {
@@ -343,25 +341,26 @@ impl ClientHandler {
                 return Ok(Some(help_msg.trim().to_string()));
             }
             "gm" => {
-                self.change_game_mode(command.arg::<u8>(0)?).await;
+                self.change_game_mode(GameMode::from(command.arg::<u8>(0)?))
+                    .await;
             }
             _ => return Err(format!("{}: Unknown command.", command.name())),
         }
         Ok(None)
     }
 
-    async fn change_game_mode(&mut self, gamemode: u8) {
-        self.game_mode = gamemode;
+    async fn change_game_mode(&mut self, game_mode: GameMode) {
+        self.game_mode = game_mode;
         self.send_packet(Packet::S2BChangeGameState {
-            reason: 3,
-            value: gamemode as f32,
+            reason: GameStateReason::ChangeGameMode,
+            value: game_mode as i32 as f32,
         })
         .await;
         self.send_abilities().await;
         self.send_broadcast(Packet::S38PlayerListItem {
             uuid: self.player_uuid,
             action: PlayerListItemAction::UpdateGameMode {
-                gamemode: self.game_mode as i32,
+                game_mode: game_mode,
             },
         })
         .await;
@@ -376,7 +375,7 @@ impl ClientHandler {
 
     async fn send_abilities(&mut self) {
         self.send_packet(Packet::S39PlayerAbilities {
-            flags: AbilityFlags::from_gamemode(self.game_mode),
+            flags: AbilityFlags::from_game_mode(self.game_mode),
             flying_speed: self.fly_speed,
             walking_speed: self.walk_speed,
         })
@@ -402,9 +401,9 @@ impl ClientHandler {
         if center != self.current_chunk_pos {
             self.current_chunk_pos = center;
 
-            let r = self.server_config.view_dist;
-            self.world_gen.request_region(center.x, center.z, r);
-            self.world_gen.await_region(center.x, center.z, r).await;
+            let r = self.server.config.view_dist;
+            self.server.gen.request_region(center.x, center.z, r);
+            self.server.gen.await_region(center.x, center.z, r).await;
             self.send_chunks(center.x, center.z, r).await?;
 
             let min_x = center.x - r;
@@ -437,7 +436,7 @@ impl ClientHandler {
         for z in -r..=r {
             for x in -r..=r {
                 let chunk_pos = ChunkPos::new(center_x + x, center_z + z);
-                let chunk_opt = self.world.get_chunk(chunk_pos);
+                let chunk_opt = self.server.world.get_chunk(chunk_pos);
                 if chunk_opt.is_some() && !self.known_chunks.contains(&chunk_pos) {
                     chunk_refs.push(chunk_opt.unwrap());
                     self.known_chunks.insert(chunk_pos);

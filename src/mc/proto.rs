@@ -1,4 +1,7 @@
-use crate::world::{BlockPos, Chunk};
+use crate::{
+    model::GameMode,
+    world::{BlockPos, Chunk},
+};
 
 #[derive(Debug, Clone)]
 pub enum PlayState {
@@ -82,13 +85,12 @@ impl AbilityFlags {
             god_mode,
         }
     }
-    pub fn from_gamemode(gamemode: u8) -> AbilityFlags {
-        match gamemode {
-            0 => AbilityFlags::new(false, false, false, false), // Survival
-            1 => AbilityFlags::new(true, true, false, true),    // Creative
-            2 => AbilityFlags::new(false, false, false, false), // Adventure
-            3 => AbilityFlags::new(true, false, true, true),    // Spectator
-            _ => panic!("Invalid gamemode {}", gamemode),
+    pub fn from_game_mode(game_mode: GameMode) -> AbilityFlags {
+        match game_mode {
+            GameMode::Survival => AbilityFlags::new(false, false, false, false),
+            GameMode::Creative => AbilityFlags::new(true, true, false, true),
+            GameMode::Adventure => AbilityFlags::new(false, false, false, false),
+            GameMode::Spectator => AbilityFlags::new(true, false, true, true),
         }
     }
 }
@@ -98,12 +100,12 @@ impl AbilityFlags {
 pub enum PlayerListItemAction {
     AddPlayer {
         name: String,
-        gamemode: i32,
+        game_mode: GameMode,
         ping: i32,
         display_name: Option<String>,
     },
     UpdateGameMode {
-        gamemode: i32,
+        game_mode: GameMode,
     },
     UpdateLatency {
         ping: i32,
@@ -124,6 +126,45 @@ impl PlayerListItemAction {
             Self::RemovePlayer { .. } => 4,
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DiggingStatus {
+    StartDigging,
+    CancelDigging,
+    FinishDigging,
+    DropStack,
+    DropItem,
+    FinishAction,
+}
+
+impl From<u8> for DiggingStatus {
+    fn from(value: u8) -> Self {
+        match value {
+            0 => DiggingStatus::StartDigging,
+            1 => DiggingStatus::CancelDigging,
+            2 => DiggingStatus::FinishDigging,
+            3 => DiggingStatus::DropStack,
+            4 => DiggingStatus::DropItem,
+            5 => DiggingStatus::FinishAction,
+            _ => panic!("Unknown digging status {}", value),
+        }
+    }
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub enum GameStateReason {
+    InvalidBed,
+    EndRaining,
+    BeginRaining,
+    ChangeGameMode,
+    EnterCredits,
+    DemoMessage,
+    ArrowHitting,
+    FadeValue,
+    FadeTime,
+    MobAppearance,
 }
 
 #[derive(Debug, Clone)]
@@ -190,7 +231,7 @@ pub enum Packet {
         on_ground: bool,
     },
     C07PlayerDigging {
-        status: u8,
+        status: DiggingStatus,
         location: BlockPos,
         face: u8,
     },
@@ -199,7 +240,7 @@ pub enum Packet {
     },
     S01JoinGame {
         entity_id: i32,
-        gamemode: u8,
+        game_mode: GameMode,
         dimension: u8,
         difficulty: u8,
         player_list_size: u8,
@@ -241,7 +282,7 @@ pub enum Packet {
         entries: Vec<EntityMetaEntry>,
     },
     S2BChangeGameState {
-        reason: u8,
+        reason: GameStateReason,
         value: f32,
     },
     S38PlayerListItem {
