@@ -3,7 +3,7 @@ master_scale = 5.5
 ocean_level = 0.02
 
 # Noise config
-octaves = 6
+octaves = 4
 falloff = 0.3
 
 # Heightmap config
