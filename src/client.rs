@@ -8,19 +8,18 @@ use dashmap::DashSet;
 use futures::{SinkExt, StreamExt};
 use indoc::indoc;
 use log::{error, info, trace};
-use rand::Rng;
 use serde_json::json;
 use tokio::{
+    io,
     net::TcpStream,
     select,
     sync::mpsc,
     time::{self, Instant},
 };
 use tokio_util::codec::Framed;
-use uuid::Uuid;
 
 use crate::{
-    block_id, block_meta,
+    block_id, block_meta, chat_packet,
     command::Command,
     mc::{
         codec::MinecraftCodec,
@@ -29,49 +28,38 @@ use crate::{
         },
         proto::{PlayState, PlayerListItemAction},
     },
-    model::{GameMode, Server},
-    utils::broadcast_chat,
+    model::{GameMode, Player, Server},
     world::{Chunk, ChunkPos, MutexChunkRef},
 };
 
-static EID_COUNTER: AtomicI32 = AtomicI32::new(0);
+static EID_COUNTER: AtomicI32 = AtomicI32::new(1);
 
 pub struct ClientHandler {
-    in_stream: Framed<TcpStream, MinecraftCodec>,
-    out_stream: mpsc::Receiver<Packet>,
+    msg_stream: Framed<TcpStream, MinecraftCodec>,
+    unicast: mpsc::Receiver<Packet>,
     broadcast: mpsc::Sender<Packet>,
     server: Server,
-    entity_id: i32,
-    username: String,
+    player: Player,
     known_chunks: DashSet<ChunkPos>,
     current_chunk_pos: ChunkPos,
-    fly_speed: f32,
-    walk_speed: f32,
-    game_mode: GameMode,
-    player_uuid: Uuid,
 }
 
 impl ClientHandler {
     pub fn new(
-        in_stream: Framed<TcpStream, MinecraftCodec>,
-        out_stream: mpsc::Receiver<Packet>,
+        msg_stream: Framed<TcpStream, MinecraftCodec>,
+        unicast: mpsc::Receiver<Packet>,
         broadcast: mpsc::Sender<Packet>,
         server: Server,
     ) -> ClientHandler {
         let game_mode = server.config.game_mode;
         ClientHandler {
-            in_stream,
-            out_stream,
+            msg_stream,
+            unicast,
             broadcast,
             server,
-            entity_id: 0,
-            username: String::new(),
+            player: Player::new(0, game_mode),
             known_chunks: DashSet::new(),
             current_chunk_pos: ChunkPos::new(0, 0),
-            fly_speed: 0.05,
-            walk_speed: 0.1,
-            game_mode,
-            player_uuid: Uuid::from_u128(rand::thread_rng().gen()),
         }
     }
 
@@ -83,7 +71,7 @@ impl ClientHandler {
 
         loop {
             select! {
-                packet_in = self.in_stream.next() => {
+                packet_in = self.msg_stream.next() => {
                     if packet_in.is_none() {
                         break;
                     }
@@ -101,15 +89,15 @@ impl ClientHandler {
                     }
 
                 },
-                packet_out = self.out_stream.recv() => {
+                packet_out = self.unicast.recv() => {
                     if packet_out.is_none() {
                         break;
                     }
 
-                    self.in_stream.send(packet_out.unwrap()).await.expect("Client send failed");
+                    self.msg_stream.send(packet_out.unwrap()).await.expect("Client send failed");
                 }
                 _ = keep_alive_interval.tick() => {
-                    self.in_stream
+                    self.msg_stream
                         .send(Packet::S00KeepAlive { timestamp: 69 })
                         .await
                         .expect("Client keep-alive failed");
@@ -117,11 +105,11 @@ impl ClientHandler {
             }
         }
 
-        self.in_stream.close().await.unwrap();
-        self.out_stream.close();
+        self.msg_stream.close().await.unwrap();
+        self.unicast.close();
     }
 
-    async fn handle_packet(&mut self, packet: Packet) -> std::io::Result<()> {
+    async fn handle_packet(&mut self, packet: Packet) -> io::Result<()> {
         trace!("Received {:?}", packet);
 
         match packet {
@@ -134,7 +122,7 @@ impl ClientHandler {
                     panic!("Unsupported protocol version");
                 }
 
-                self.in_stream.codec_mut().change_state(next_state);
+                self.msg_stream.codec_mut().set_state(next_state);
             }
 
             Packet::C00StatusRequest => {
@@ -152,106 +140,101 @@ impl ClientHandler {
                         "text": self.server.config.motd
                     }
                 });
-                self.in_stream
-                    .send(Packet::S00StatusResponse {
-                        status: status.to_string(),
-                    })
-                    .await?;
+                self.send_packet(Packet::S00StatusResponse {
+                    status: status.to_string(),
+                })
+                .await?;
             }
             Packet::C01StatusPing { timestamp } => {
-                self.in_stream
-                    .send(Packet::S01StatusPong { timestamp })
+                self.send_packet(Packet::S01StatusPong { timestamp })
                     .await?;
             }
 
             Packet::C00LoginStart { username } => {
-                self.username = username;
+                self.player.username = username;
 
                 // Enable compression
-                self.in_stream
-                    .send(Packet::S03LoginCompression {
-                        threshold: self.server.config.net_compression as i32,
-                    })
-                    .await?;
-                self.in_stream
+                self.send_packet(Packet::S03LoginCompression {
+                    threshold: self.server.config.net_compression as i32,
+                })
+                .await?;
+                self.msg_stream
                     .codec_mut()
-                    .change_compression_threshold(self.server.config.net_compression);
+                    .set_compression_threshold(self.server.config.net_compression);
 
                 // Enter play state
-                self.in_stream
-                    .send(Packet::S02LoginSuccess {
-                        uuid: self.player_uuid.to_string(),
-                        username: self.username.clone(),
-                    })
-                    .await?;
-                self.in_stream.codec_mut().change_state(PlayState::Play);
+                self.send_packet(Packet::S02LoginSuccess {
+                    uuid: self.player.uuid.to_string(),
+                    username: self.player.username.clone(),
+                })
+                .await?;
+                self.msg_stream.codec_mut().set_state(PlayState::Play);
 
                 // Complete login sequence
-                self.entity_id = EID_COUNTER.fetch_add(1, Ordering::SeqCst);
-                self.in_stream
-                    .send(Packet::S01JoinGame {
-                        entity_id: self.entity_id,
-                        game_mode: self.game_mode,
-                        dimension: 0,
-                        difficulty: self.server.config.difficulty,
-                        player_list_size: 4,
-                        world_type: "default".to_string(),
-                        reduced_debug_info: false,
-                    })
-                    .await?;
+                self.player.eid = EID_COUNTER.fetch_add(1, Ordering::SeqCst);
+                self.send_packet(Packet::S01JoinGame {
+                    entity_id: self.player.eid,
+                    game_mode: self.player.game_mode,
+                    dimension: 0,
+                    difficulty: self.server.config.difficulty,
+                    player_list_size: 4,
+                    world_type: "default".to_string(),
+                    reduced_debug_info: false,
+                })
+                .await?;
 
-                // Transmit world
+                // Send world chunks
                 self.send_chunks(0, 0, self.server.config.view_dist).await?;
 
                 // Spawn player into world
-                self.in_stream
-                    .send(Packet::S08SetPlayerPosition {
-                        x: 0.0,
-                        y: 64.0,
-                        z: 0.0,
-                        yaw: 0.0,
-                        pitch: 0.0,
-                        flags: 0,
-                    })
-                    .await?;
+                self.send_packet(Packet::S08SetPlayerPosition {
+                    x: 0.0,
+                    y: 64.0,
+                    z: 0.0,
+                    yaw: 0.0,
+                    pitch: 0.0,
+                    flags: 0,
+                })
+                .await?;
 
-                // Announce login
+                // Announce player join
                 info!(
                     "{} logged in with entity id {}",
-                    self.username, self.entity_id
+                    self.player.username, self.player.eid
                 );
-                broadcast_chat(
-                    &mut self.broadcast,
-                    format!("§e{} joined the game", self.username),
-                )
-                .await;
+                self.send_broadcast(chat_packet!(
+                    1,
+                    format!("§e{} joined the game", self.player.username)
+                ))
+                .await?;
                 self.send_broadcast(Packet::S38PlayerListItem {
-                    uuid: self.player_uuid,
+                    uuid: self.player.uuid,
                     action: PlayerListItemAction::AddPlayer {
-                        name: self.username.clone(),
-                        game_mode: self.game_mode,
+                        name: self.player.username.clone(),
+                        game_mode: self.player.game_mode,
                         display_name: None,
                         ping: 0,
                     },
                 })
-                .await;
+                .await?;
             }
             Packet::C01ChatMessage { message } => {
                 let message = message.as_str();
                 if message.starts_with("/") {
-                    self.handle_command(message).await;
+                    self.handle_command(message).await?;
                 } else {
-                    info!("Chat message: <{}> {}", self.username, message);
+                    info!("Chat message: <{}> {}", self.player.username, message);
 
-                    let formatted_message = format!("§b{}§r: {}", self.username, message);
-                    broadcast_chat(&mut self.broadcast, formatted_message).await;
+                    let formatted_message = format!("§b{}§r: {}", self.player.username, message);
+                    self.send_broadcast(chat_packet!(0, formatted_message))
+                        .await?;
                 }
             }
             Packet::C07PlayerDigging {
                 location, status, ..
             } => {
                 // TODO Sanitize position
-                if self.game_mode == GameMode::Survival {
+                if self.player.game_mode == GameMode::Survival {
                     if status == DiggingStatus::FinishDigging {
                         let block = self
                             .server
@@ -262,7 +245,7 @@ impl ClientHandler {
 
                         // Create item entity
                         let dropped_item_eid = EID_COUNTER.fetch_add(1, Ordering::SeqCst);
-                        self.in_stream
+                        self.msg_stream
                             .send(Packet::S0ESpawnObject {
                                 entity_id: dropped_item_eid,
                                 kind: 2,
@@ -276,7 +259,7 @@ impl ClientHandler {
                             .await?;
 
                         // Set item entity metadata
-                        self.in_stream
+                        self.msg_stream
                             .send(Packet::S1CEntityMeta {
                                 entity_id: dropped_item_eid,
                                 entries: vec![EntityMetaEntry::new(
@@ -317,19 +300,21 @@ impl ClientHandler {
         Ok(())
     }
 
-    async fn handle_command(&mut self, command: &str) {
-        let result = self.process_command(command).await;
+    async fn handle_command(&mut self, command: &str) -> io::Result<()> {
+        let result = self.exec_command(command).await;
         let message_opt = match result {
             Ok(str) => str,
             Err(str) => Some(format!("§cError: {}", str)),
         };
         if message_opt.is_some() {
-            self.send_chat_message(json!({"text": message_opt.unwrap()}), 1)
-                .await;
+            self.send_packet(chat_packet!(1, message_opt.unwrap()))
+                .await
+        } else {
+            Ok(())
         }
     }
 
-    async fn process_command(&mut self, command: &str) -> Result<Option<String>, String> {
+    async fn exec_command(&mut self, command: &str) -> Result<Option<String>, String> {
         let command = Command::parse(command);
         match command.name() {
             "help" => {
@@ -342,63 +327,32 @@ impl ClientHandler {
             }
             "gm" => {
                 self.change_game_mode(GameMode::from(command.arg::<u8>(0)?))
-                    .await;
+                    .await
+                    .expect("Failed to change game mode");
             }
             _ => return Err(format!("{}: Unknown command.", command.name())),
         }
         Ok(None)
     }
 
-    async fn change_game_mode(&mut self, game_mode: GameMode) {
-        self.game_mode = game_mode;
+    async fn change_game_mode(&mut self, game_mode: GameMode) -> io::Result<()> {
+        self.player.game_mode = game_mode;
         self.send_packet(Packet::S2BChangeGameState {
             reason: GameStateReason::ChangeGameMode,
             value: game_mode as i32 as f32,
         })
-        .await;
-        self.send_abilities().await;
+        .await?;
+        self.send_abilities().await?;
         self.send_broadcast(Packet::S38PlayerListItem {
-            uuid: self.player_uuid,
-            action: PlayerListItemAction::UpdateGameMode {
-                game_mode: game_mode,
-            },
+            uuid: self.player.uuid,
+            action: PlayerListItemAction::UpdateGameMode { game_mode },
         })
-        .await;
+        .await?;
+        Ok(())
     }
 
-    async fn send_broadcast(&self, packet: Packet) {
-        self.broadcast
-            .send(packet)
-            .await
-            .expect("Failed to send broadcast");
-    }
-
-    async fn send_abilities(&mut self) {
-        self.send_packet(Packet::S39PlayerAbilities {
-            flags: AbilityFlags::from_game_mode(self.game_mode),
-            flying_speed: self.fly_speed,
-            walking_speed: self.walk_speed,
-        })
-        .await;
-    }
-
-    async fn send_chat_message(&mut self, data: serde_json::Value, position: u8) {
-        self.send_packet(Packet::S02ChatMessage {
-            json_data: data.to_string(),
-            position,
-        })
-        .await;
-    }
-
-    async fn send_packet(&mut self, packet: Packet) {
-        self.in_stream
-            .send(packet)
-            .await
-            .expect("Failed to send packet");
-    }
-
-    async fn update_chunks(&mut self, center: ChunkPos) -> std::io::Result<()> {
-        if center != self.current_chunk_pos {
+    async fn update_chunks(&mut self, center: ChunkPos) -> io::Result<()> {
+        if self.current_chunk_pos != center {
             self.current_chunk_pos = center;
 
             let r = self.server.config.view_dist;
@@ -419,8 +373,7 @@ impl ClientHandler {
                 .collect::<Vec<ChunkPos>>();
 
             for r in removed {
-                self.in_stream
-                    .send(Packet::S21ChunkData { x: r.x, z: r.z })
+                self.send_packet(Packet::S21ChunkData { x: r.x, z: r.z })
                     .await?;
                 self.known_chunks.remove(&r);
             }
@@ -429,7 +382,27 @@ impl ClientHandler {
         Ok(())
     }
 
-    async fn send_chunks(&mut self, center_x: i32, center_z: i32, r: i32) -> std::io::Result<()> {
+    async fn send_packet(&mut self, packet: Packet) -> io::Result<()> {
+        self.msg_stream.send(packet).await
+    }
+
+    async fn send_broadcast(&self, packet: Packet) -> io::Result<()> {
+        match self.broadcast.send(packet).await {
+            Ok(_) => Ok(()),
+            Err(e) => Err(io::Error::new(io::ErrorKind::Other, e)),
+        }
+    }
+
+    async fn send_abilities(&mut self) -> io::Result<()> {
+        self.send_packet(Packet::S39PlayerAbilities {
+            flags: AbilityFlags::from_game_mode(self.player.game_mode),
+            flying_speed: self.player.fly_speed,
+            walking_speed: self.player.walk_speed,
+        })
+        .await
+    }
+
+    async fn send_chunks(&mut self, center_x: i32, center_z: i32, r: i32) -> io::Result<()> {
         let mut chunk_refs = Vec::<MutexChunkRef>::new();
 
         // Collect chunks to be sent
@@ -447,18 +420,19 @@ impl ClientHandler {
         // Split into packets
         let chunks_per_packet = 10;
 
-        for subslice in chunk_refs.chunks(chunks_per_packet) {
-            let mut transmit_chunks = Vec::<Chunk>::new();
-            for chunk_ref in subslice {
-                transmit_chunks.push(chunk_ref.lock().unwrap().clone())
+        for packet_chunk_refs in chunk_refs.chunks(chunks_per_packet) {
+            // Lock and copy chunks for the network
+            let mut chunks = Vec::<Chunk>::new();
+            for chunk_ref in packet_chunk_refs {
+                chunks.push(chunk_ref.lock().unwrap().clone())
             }
 
-            self.in_stream
-                .send(Packet::S26MapChunkBulk {
-                    skylight: true,
-                    chunks: transmit_chunks,
-                })
-                .await?;
+            // Send chunks
+            self.send_packet(Packet::S26MapChunkBulk {
+                skylight: true,
+                chunks,
+            })
+            .await?;
         }
 
         Ok(())

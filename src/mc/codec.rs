@@ -6,13 +6,11 @@ use tokio_util::codec::{Decoder, Encoder};
 
 use crate::{
     mc::{
-        proto::{EntityMetaData, Packet, PlayState, PlayerListItemAction},
+        proto::{DiggingStatus, EntityMetaData, Packet, PlayState, PlayerListItemAction},
         zlib,
     },
     world::BlockPos,
 };
-
-use super::proto::DiggingStatus;
 
 const PACKET_SIZE_LIMIT: usize = 2 * 1024 * 1024;
 
@@ -110,7 +108,7 @@ enum DecoderState {
 
 pub struct MinecraftCodec {
     compression_threshold: usize,
-    current_state: PlayState,
+    play_state: PlayState,
     decoder_state: DecoderState,
 }
 
@@ -118,17 +116,17 @@ impl MinecraftCodec {
     pub fn new() -> MinecraftCodec {
         MinecraftCodec {
             compression_threshold: 0,
-            current_state: PlayState::Handshake,
+            play_state: PlayState::Handshake,
             decoder_state: DecoderState::Header,
         }
     }
 
-    pub fn change_state(&mut self, next_state: PlayState) {
+    pub fn set_state(&mut self, next_state: PlayState) {
         debug!("Changing to state {:?}", next_state);
-        self.current_state = next_state;
+        self.play_state = next_state;
     }
 
-    pub fn change_compression_threshold(&mut self, compression_threshold: usize) {
+    pub fn set_compression_threshold(&mut self, compression_threshold: usize) {
         debug!(
             "Changing compression threshold to {}",
             compression_threshold
@@ -467,7 +465,7 @@ impl Decoder for MinecraftCodec {
                 let packet_id = payload.get_var_int();
                 trace!("Decoding packet #{} with length {}", packet_id, packet_len);
 
-                Ok(match self.current_state {
+                Ok(match self.play_state {
                     PlayState::Handshake => self.decode_handshake_packet(packet_id, &mut payload),
                     PlayState::Status => self.decode_status_packet(packet_id, &mut payload),
                     PlayState::Login => self.decode_login_packet(packet_id, &mut payload),

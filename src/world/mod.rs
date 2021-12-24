@@ -43,6 +43,14 @@ impl BlockPos {
         BlockPos { x, y, z }
     }
 
+    pub fn from_pos(x: f64, y: f64, z: f64) -> BlockPos {
+        BlockPos {
+            x: x.abs() as i32,
+            y: y.abs() as i32,
+            z: z.abs() as i32,
+        }
+    }
+
     pub fn to_u64(&self) -> u64 {
         let x = self.x as u64;
         let y = self.y as u64;
@@ -189,28 +197,30 @@ pub struct World {
 impl World {
     pub fn new() -> World {
         World {
-            chunks: DashMap::with_capacity(32),
+            chunks: DashMap::with_capacity(256),
         }
+    }
+
+    pub fn has_chunk(&self, pos: ChunkPos) -> bool {
+        self.chunks.contains_key(&pos)
     }
 
     pub fn get_chunk(&self, pos: ChunkPos) -> Option<MutexChunkRef> {
         match self.chunks.get(&pos) {
-            Some(chk) => Some(chk.clone()),
+            Some(chunk_ref) => Some(chunk_ref.clone()),
             None => None,
         }
     }
 
     pub fn create_chunk(&self, pos: ChunkPos) -> MutexChunkRef {
-        if !self.chunks.contains_key(&pos) {
-            self.chunks
-                .insert(pos, Arc::new(Mutex::new(Chunk::new(pos.x, pos.z))));
+        match self.chunks.get(&pos) {
+            Some(chunk_ref) => chunk_ref.clone(),
+            None => {
+                let new_chunk = Arc::new(Mutex::new(Chunk::new(pos.x, pos.z)));
+                self.chunks.insert(pos, new_chunk.clone());
+                new_chunk
+            }
         }
-
-        (*self.chunks.get(&pos).unwrap()).clone()
-    }
-
-    pub fn has_chunk(&self, pos: ChunkPos) -> bool {
-        self.chunks.contains_key(&pos)
     }
 
     pub fn insert_chunk(&self, chunk: Chunk) {

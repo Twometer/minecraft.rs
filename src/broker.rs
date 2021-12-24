@@ -5,41 +5,39 @@ use tokio::sync::{mpsc, Mutex};
 use crate::mc::proto::Packet;
 
 pub struct PacketBroker {
-    broadcast: mpsc::Sender<Packet>,
-    outputs: Arc<Mutex<Vec<mpsc::Sender<Packet>>>>,
+    broadcast_tx: mpsc::Sender<Packet>,
+    client_streams: Arc<Mutex<Vec<mpsc::Sender<Packet>>>>,
 }
 
 impl PacketBroker {
     pub fn new() -> PacketBroker {
-        let (tx, rx) = mpsc::channel::<Packet>(128);
-        let outputs = Arc::new(Mutex::new(Vec::<mpsc::Sender<Packet>>::new()));
+        let (broadcast_tx, broadcast_rx) = mpsc::channel::<Packet>(128);
+        let clients = Arc::new(Mutex::new(Vec::<mpsc::Sender<Packet>>::new()));
 
-        Self::spawn_broadcaster(rx, outputs.clone());
-
-        PacketBroker {
-            broadcast: tx,
-            outputs,
-        }
+        let broker = PacketBroker {
+            broadcast_tx,
+            client_streams: clients,
+        };
+        broker.start(broadcast_rx);
+        broker
     }
 
-    pub fn new_broadcast(&mut self) -> mpsc::Sender<Packet> {
-        self.broadcast.clone()
+    pub fn new_broadcast(&self) -> mpsc::Sender<Packet> {
+        self.broadcast_tx.clone()
     }
 
-    pub async fn new_unicast(&mut self) -> mpsc::Receiver<Packet> {
-        let mut channels = self.outputs.lock().await;
+    pub async fn new_unicast(&self) -> mpsc::Receiver<Packet> {
+        let mut channels = self.client_streams.lock().await;
         let (tx, rx) = mpsc::channel::<Packet>(128);
         channels.push(tx);
         rx
     }
 
-    fn spawn_broadcaster(
-        mut input: mpsc::Receiver<Packet>,
-        outputs: Arc<Mutex<Vec<mpsc::Sender<Packet>>>>,
-    ) {
+    fn start(&self, mut broadcast_rx: mpsc::Receiver<Packet>) {
+        let clients = self.client_streams.clone();
         tokio::spawn(async move {
-            while let Some(packet) = input.recv().await {
-                let outputs = outputs.lock().await;
+            while let Some(packet) = broadcast_rx.recv().await {
+                let outputs = clients.lock().await;
                 let send_futures: Vec<_> = outputs
                     .iter()
                     .map(|output| output.send(packet.clone()))

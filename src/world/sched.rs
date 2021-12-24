@@ -12,29 +12,36 @@ pub struct GenerationScheduler {
     pending: Arc<DashSet<ChunkPos>>,
     request_tx: Sender<ChunkPos>,
     request_rx: Receiver<ChunkPos>,
-    broadcast: broadcast::Sender<ChunkPos>,
+    completion_bc: broadcast::Sender<ChunkPos>,
 }
 
 impl GenerationScheduler {
-    pub fn new(world: Arc<World>, generator: Arc<WorldGenerator>) -> GenerationScheduler {
+    pub fn new(
+        world: Arc<World>,
+        generator: Arc<WorldGenerator>,
+        num_threads: u32,
+    ) -> GenerationScheduler {
         let (tx, rx) = flume::unbounded();
-        let (broadcast, _) = broadcast::channel::<ChunkPos>(32);
-        GenerationScheduler {
+        let (completion_bc, _) = broadcast::channel::<ChunkPos>(32);
+
+        let scheduler = GenerationScheduler {
             world,
             generator,
             pending: Arc::new(DashSet::new()),
             request_tx: tx,
             request_rx: rx,
-            broadcast,
-        }
+            completion_bc,
+        };
+        scheduler.start(num_threads);
+        scheduler
     }
 
-    pub fn start(&self, num_threads: u32) {
+    fn start(&self, num_threads: u32) {
         for _ in 0..num_threads {
             let generator = self.generator.clone();
             let pending = self.pending.clone();
             let rx = self.request_rx.clone();
-            let bc = self.broadcast.clone();
+            let bc = self.completion_bc.clone();
 
             std::thread::spawn(move || loop {
                 let chunk = rx.recv().expect("failed to recv from chunk queue");
@@ -54,8 +61,7 @@ impl GenerationScheduler {
     }
 
     pub async fn await_region(&self, center_x: i32, center_z: i32, r: i32) {
-        // TODO: may be susceptible to data race?
-        let mut receiver = self.broadcast.subscribe();
+        let mut receiver = self.completion_bc.subscribe();
         let mut remaining_chunks = HashSet::<ChunkPos>::new();
         for x in -r..=r {
             for z in -r..=r {

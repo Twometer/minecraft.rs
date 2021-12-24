@@ -10,7 +10,6 @@ mod world;
 use std::sync::Arc;
 
 use log::{debug, info};
-use model::Server;
 use stopwatch::Stopwatch;
 use tokio::io;
 use tokio::net::{TcpListener, TcpStream};
@@ -21,6 +20,7 @@ use crate::broker::PacketBroker;
 use crate::client::ClientHandler;
 use crate::config::{ServerConfig, WorldGenConfig};
 use crate::mc::{codec::MinecraftCodec, proto::Packet};
+use crate::model::Server;
 use crate::world::random_seed;
 use crate::world::sched::GenerationScheduler;
 use crate::world::{gen::WorldGenerator, World};
@@ -44,7 +44,7 @@ async fn main() -> io::Result<()> {
 
     info!("Binding TCP listener...");
     let listener = TcpListener::bind(server.config.net_endpoint.as_str()).await?;
-    let mut broker = PacketBroker::new();
+    let broker = PacketBroker::new();
 
     info!("Done. Server started in {:?}", startup_sw.elapsed());
 
@@ -81,11 +81,11 @@ fn create_world_gen(
     };
     debug!("Initializing world generator with seed {}", seed);
 
-    let gen = Arc::new(WorldGenerator::new(seed, config, world.clone()));
-    let sched = Arc::new(GenerationScheduler::new(world.clone(), gen));
-    sched.start(server_conf.generator_threads);
-
-    sched
+    Arc::new(GenerationScheduler::new(
+        world.clone(),
+        Arc::new(WorldGenerator::new(seed, config, world.clone())),
+        server_conf.generator_threads,
+    ))
 }
 
 fn handle_client(
