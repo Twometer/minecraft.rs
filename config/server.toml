@@ -5,5 +5,5 @@ game_mode = "Creative"
 difficulty = 0
 net_endpoint = "127.0.0.1:25565"
 net_compression = 256
-generator_threads = 16
+generator_threads = 32
 view_dist = 10

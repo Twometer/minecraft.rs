@@ -322,6 +322,8 @@ impl ClientHandler {
                 == §aHelp§r ==
                 §9 /help§r: Show command overview
                 §9 /gm §7<mode>§r: Change gamemode
+                §9 /flyspeed §7<speed>§r: Set flying speed multiplier
+                §9 /walkspeed §7<speed>§r: Set walking speed multiplier
                 "};
                 return Ok(Some(help_msg.trim().to_string()));
             }
@@ -329,10 +331,34 @@ impl ClientHandler {
                 self.change_game_mode(GameMode::from(command.arg::<u8>(0)?))
                     .await
                     .expect("Failed to change game mode");
+
+                return Ok(Some(format!(
+                    "Game mode changed to {:?}",
+                    self.player.game_mode
+                )));
+            }
+            "flyspeed" => {
+                self.player.fly_speed = command.arg::<f32>(0)?;
+                self.send_abilities()
+                    .await
+                    .expect("Failed to send abilities");
+                return Ok(Some(format!(
+                    "Flying speed changed to {}",
+                    self.player.fly_speed
+                )));
+            }
+            "walkspeed" => {
+                self.player.walk_speed = command.arg::<f32>(0)?;
+                self.send_abilities()
+                    .await
+                    .expect("Failed to send abilities");
+                return Ok(Some(format!(
+                    "Walking speed changed to {}",
+                    self.player.walk_speed
+                )));
             }
             _ => return Err(format!("{}: Unknown command.", command.name())),
         }
-        Ok(None)
     }
 
     async fn change_game_mode(&mut self, game_mode: GameMode) -> io::Result<()> {
