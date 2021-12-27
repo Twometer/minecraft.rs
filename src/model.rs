@@ -1,30 +1,8 @@
-use std::sync::Arc;
-
 use rand::Rng;
 use serde_derive::Deserialize;
 use uuid::Uuid;
 
-use crate::{
-    config::ServerConfig,
-    world::{sched::GenerationScheduler, BlockPos, ChunkPos, World},
-};
-
-#[derive(Clone)]
-pub struct Server {
-    pub config: Arc<ServerConfig>,
-    pub world: Arc<World>,
-    pub gen: Arc<GenerationScheduler>,
-}
-
-impl Server {
-    pub fn new(
-        config: Arc<ServerConfig>,
-        world: Arc<World>,
-        gen: Arc<GenerationScheduler>,
-    ) -> Server {
-        Server { config, world, gen }
-    }
-}
+use crate::world::{BlockPos, ChunkPos};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 pub enum GameMode {
@@ -44,6 +22,13 @@ impl From<u8> for GameMode {
             _ => panic!("Invalid game mode {}", val),
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct ItemStack {
+    pub id: u16,
+    pub count: u8,
+    pub damage: u16,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
@@ -104,6 +89,10 @@ impl Player {
             fly_speed: 0.05,
             walk_speed: 0.1,
         }
+    }
+
+    pub fn is_logged_in(&self) -> bool {
+        !self.username.is_empty()
     }
 }
 

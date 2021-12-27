@@ -1,8 +1,4 @@
-use std::{
-    ops::Add,
-    sync::atomic::{AtomicI32, Ordering},
-    time::Duration,
-};
+use std::{ops::Add, sync::Arc, time::Duration};
 
 use dashmap::DashSet;
 use futures::{SinkExt, StreamExt};
@@ -28,17 +24,15 @@ use crate::{
         },
         proto::{PlayState, PlayerListItemAction},
     },
-    model::{GameMode, Player, Server},
+    model::{GameMode, ItemStack, Player},
+    server::ServerHandler,
     world::{Chunk, ChunkPos, MutexChunkRef},
 };
 
-static EID_COUNTER: AtomicI32 = AtomicI32::new(1);
-
 pub struct ClientHandler {
     msg_stream: Framed<TcpStream, MinecraftCodec>,
-    unicast: mpsc::Receiver<Packet>,
-    broadcast: mpsc::Sender<Packet>,
-    server: Server,
+    unicast_rx: mpsc::Receiver<Packet>,
+    server: Arc<ServerHandler>,
     player: Player,
     known_chunks: DashSet<ChunkPos>,
     current_chunk_pos: ChunkPos,
@@ -46,18 +40,17 @@ pub struct ClientHandler {
 
 impl ClientHandler {
     pub fn new(
+        id: i32,
         msg_stream: Framed<TcpStream, MinecraftCodec>,
-        unicast: mpsc::Receiver<Packet>,
-        broadcast: mpsc::Sender<Packet>,
-        server: Server,
+        unicast_rx: mpsc::Receiver<Packet>,
+        server: Arc<ServerHandler>,
     ) -> ClientHandler {
         let game_mode = server.config.game_mode;
         ClientHandler {
             msg_stream,
-            unicast,
-            broadcast,
+            unicast_rx,
             server,
-            player: Player::new(0, game_mode),
+            player: Player::new(id, game_mode),
             known_chunks: DashSet::new(),
             current_chunk_pos: ChunkPos::new(0, 0),
         }
@@ -89,7 +82,7 @@ impl ClientHandler {
                     }
 
                 },
-                packet_out = self.unicast.recv() => {
+                packet_out = self.unicast_rx.recv() => {
                     if packet_out.is_none() {
                         break;
                     }
@@ -106,7 +99,11 @@ impl ClientHandler {
         }
 
         self.msg_stream.close().await.unwrap();
-        self.unicast.close();
+        self.unicast_rx.close();
+        self.server.remove_client(self.player.eid);
+        if self.player.is_logged_in() {
+            self.server.change_num_players(-1);
+        }
     }
 
     async fn handle_packet(&mut self, packet: Packet) -> io::Result<()> {
@@ -133,7 +130,7 @@ impl ClientHandler {
                     },
                     "players":{
                         "max": self.server.config.slots,
-                        "online": 0,
+                        "online": self.server.num_players(),
                         "sample": []
                     },
                     "description": {
@@ -152,6 +149,7 @@ impl ClientHandler {
 
             Packet::C00LoginStart { username } => {
                 self.player.username = username;
+                self.server.change_num_players(1);
 
                 // Enable compression
                 self.send_packet(Packet::S03LoginCompression {
@@ -171,7 +169,6 @@ impl ClientHandler {
                 self.msg_stream.codec_mut().set_state(PlayState::Play);
 
                 // Complete login sequence
-                self.player.eid = EID_COUNTER.fetch_add(1, Ordering::SeqCst);
                 self.send_packet(Packet::S01JoinGame {
                     entity_id: self.player.eid,
                     game_mode: self.player.game_mode,
@@ -189,7 +186,7 @@ impl ClientHandler {
                 // Spawn player into world
                 self.send_packet(Packet::S08SetPlayerPosition {
                     x: 0.0,
-                    y: 64.0,
+                    y: 69.0,
                     z: 0.0,
                     yaw: 0.0,
                     pitch: 0.0,
@@ -202,21 +199,23 @@ impl ClientHandler {
                     "{} logged in with entity id {}",
                     self.player.username, self.player.eid
                 );
-                self.send_broadcast(chat_packet!(
-                    1,
-                    format!("§e{} joined the game", self.player.username)
-                ))
-                .await?;
-                self.send_broadcast(Packet::S38PlayerListItem {
-                    uuid: self.player.uuid,
-                    action: PlayerListItemAction::AddPlayer {
-                        name: self.player.username.clone(),
-                        game_mode: self.player.game_mode,
-                        display_name: None,
-                        ping: 0,
-                    },
-                })
-                .await?;
+                self.server
+                    .send_broadcast(chat_packet!(
+                        1,
+                        format!("§e{} joined the game", self.player.username)
+                    ))
+                    .await?;
+                self.server
+                    .send_broadcast(Packet::S38PlayerListItem {
+                        uuid: self.player.uuid,
+                        action: PlayerListItemAction::AddPlayer {
+                            name: self.player.username.clone(),
+                            game_mode: self.player.game_mode,
+                            display_name: None,
+                            ping: 0,
+                        },
+                    })
+                    .await?;
             }
             Packet::C01ChatMessage { message } => {
                 let message = message.as_str();
@@ -226,62 +225,61 @@ impl ClientHandler {
                     info!("Chat message: <{}> {}", self.player.username, message);
 
                     let formatted_message = format!("§b{}§r: {}", self.player.username, message);
-                    self.send_broadcast(chat_packet!(0, formatted_message))
+                    self.server
+                        .send_broadcast(chat_packet!(0, formatted_message))
                         .await?;
                 }
             }
             Packet::C07PlayerDigging {
                 location, status, ..
             } => {
-                // TODO Sanitize position
-                if self.player.game_mode == GameMode::Survival {
-                    if status == DiggingStatus::FinishDigging {
-                        let block = self
-                            .server
-                            .world
-                            .get_block(location.x, location.y, location.z);
-                        let block_id = block_id!(block);
-                        let block_meta = block_meta!(block);
-
-                        // Create item entity
-                        let dropped_item_eid = EID_COUNTER.fetch_add(1, Ordering::SeqCst);
-                        self.msg_stream
-                            .send(Packet::S0ESpawnObject {
-                                entity_id: dropped_item_eid,
-                                kind: 2,
-                                x: location.x as f32 + 0.5,
-                                y: location.y as f32 + 0.5,
-                                z: location.z as f32 + 0.5,
-                                pitch: 0.0,
-                                yaw: 0.0,
-                                data: 0,
-                            })
-                            .await?;
-
-                        // Set item entity metadata
-                        self.msg_stream
-                            .send(Packet::S1CEntityMeta {
-                                entity_id: dropped_item_eid,
-                                entries: vec![EntityMetaEntry::new(
-                                    10,
-                                    EntityMetaData::Slot {
-                                        id: block_id,
-                                        count: 1,
-                                        damage: block_meta,
-                                    },
-                                )],
-                            })
-                            .await?;
-
-                        // Set block in world
+                let is_creative = self.player.game_mode == GameMode::Creative;
+                if (is_creative && status == DiggingStatus::StartDigging)
+                    || (!is_creative && status == DiggingStatus::FinishDigging)
+                {
+                    let block_state = self
+                        .server
+                        .world
+                        .get_block(location.x, location.y, location.z);
+                    if block_state != 0 {
                         self.server
                             .world
                             .set_block(location.x, location.y, location.z, 0);
+                        if !is_creative {
+                            let block_id = block_id!(block_state);
+                            let block_meta = block_meta!(block_state);
+
+                            // Create item entity
+                            let eid = self.server.new_id();
+                            self.server
+                                .send_broadcast(Packet::S0ESpawnObject {
+                                    entity_id: eid,
+                                    kind: 2,
+                                    x: location.x as f32 + 0.5,
+                                    y: location.y as f32 + 0.5,
+                                    z: location.z as f32 + 0.5,
+                                    pitch: 0.0,
+                                    yaw: 0.0,
+                                    data: 0,
+                                })
+                                .await?;
+
+                            // Update item entity metadata
+                            self.server
+                                .send_broadcast(Packet::S1CEntityMeta {
+                                    entity_id: eid,
+                                    entries: vec![EntityMetaEntry::new(
+                                        10,
+                                        EntityMetaData::Slot(ItemStack {
+                                            id: block_id,
+                                            count: 1,
+                                            damage: block_meta,
+                                        }),
+                                    )],
+                                })
+                                .await?;
+                        }
                     }
-                } else {
-                    self.server
-                        .world
-                        .set_block(location.x, location.y, location.z, 0);
                 }
             }
             Packet::C04PlayerPos { x, z, .. } => {
@@ -369,11 +367,12 @@ impl ClientHandler {
         })
         .await?;
         self.send_abilities().await?;
-        self.send_broadcast(Packet::S38PlayerListItem {
-            uuid: self.player.uuid,
-            action: PlayerListItemAction::UpdateGameMode { game_mode },
-        })
-        .await?;
+        self.server
+            .send_broadcast(Packet::S38PlayerListItem {
+                uuid: self.player.uuid,
+                action: PlayerListItemAction::UpdateGameMode { game_mode },
+            })
+            .await?;
         Ok(())
     }
 
@@ -410,13 +409,6 @@ impl ClientHandler {
 
     async fn send_packet(&mut self, packet: Packet) -> io::Result<()> {
         self.msg_stream.send(packet).await
-    }
-
-    async fn send_broadcast(&self, packet: Packet) -> io::Result<()> {
-        match self.broadcast.send(packet).await {
-            Ok(_) => Ok(()),
-            Err(e) => Err(io::Error::new(io::ErrorKind::Other, e)),
-        }
     }
 
     async fn send_abilities(&mut self) -> io::Result<()> {

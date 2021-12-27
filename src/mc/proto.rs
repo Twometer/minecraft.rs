@@ -1,5 +1,5 @@
 use crate::{
-    model::GameMode,
+    model::{GameMode, ItemStack},
     world::{BlockPos, Chunk},
 };
 
@@ -31,7 +31,7 @@ pub enum EntityMetaData {
     Int(i32),
     Float(f32),
     String(String),
-    Slot { id: u16, count: u8, damage: u16 },
+    Slot(ItemStack),
     Vec3i { x: i32, y: i32, z: i32 },
     Vec3f { x: f32, y: f32, z: f32 },
 }
@@ -44,7 +44,7 @@ impl EntityMetaData {
             &EntityMetaData::Int(_) => 2,
             &EntityMetaData::Float(_) => 3,
             &EntityMetaData::String(_) => 4,
-            &EntityMetaData::Slot { .. } => 5,
+            &EntityMetaData::Slot(_) => 5,
             &EntityMetaData::Vec3i { .. } => 6,
             &EntityMetaData::Vec3f { .. } => 7,
         }
@@ -299,17 +299,21 @@ pub enum Packet {
 impl Packet {
     pub fn id(&self) -> i32 {
         match self {
+            // Handshake
             &Packet::C00Handshake { .. } => 0x00,
 
+            // Status
             &Packet::C00StatusRequest { .. } => 0x00,
             &Packet::C01StatusPing { .. } => 0x01,
             &Packet::S00StatusResponse { .. } => 0x00,
             &Packet::S01StatusPong { .. } => 0x01,
 
+            // Login
             &Packet::C00LoginStart { .. } => 0x00,
             &Packet::S02LoginSuccess { .. } => 0x02,
             &Packet::S03LoginCompression { .. } => 0x03,
 
+            // PLay
             &Packet::C00KeepAlive { .. } => 0x00,
             &Packet::C01ChatMessage { .. } => 0x01,
             &Packet::C03Player { .. } => 0x03,

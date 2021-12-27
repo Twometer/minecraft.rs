@@ -338,10 +338,10 @@ impl MinecraftCodec {
                         EntityMetaData::Int(v) => buf.put_i32(v),
                         EntityMetaData::Float(v) => buf.put_f32(v),
                         EntityMetaData::String(v) => buf.put_string(v.as_str()),
-                        EntityMetaData::Slot { id, count, damage } => {
-                            buf.put_u16(id);
-                            buf.put_u8(count);
-                            buf.put_u16(damage);
+                        EntityMetaData::Slot(itm) => {
+                            buf.put_u16(itm.id);
+                            buf.put_u8(itm.count);
+                            buf.put_u16(itm.damage);
                             buf.put_u8(0);
                         }
                         EntityMetaData::Vec3i { x, y, z } => {

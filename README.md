@@ -17,3 +17,7 @@ A high-performance Minecraft server in Rust
     -   [ ] Inventory & crafting system
     -   [ ] Animal spawning and AI
     -   [ ] Damage system
+
+## Coding time
+
+![Total](https://wakatime.com/badge/user/25464352-4370-4ddc-8fb4-71a7f3b2faa9/project/25f91265-2890-4af1-804c-c9dfe214ae84.svg)

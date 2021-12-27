@@ -1,9 +1,9 @@
-mod broker;
 mod client;
 mod command;
 mod config;
 mod mc;
 mod model;
+mod server;
 mod utils;
 mod world;
 
@@ -16,11 +16,10 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc;
 use tokio_util::codec::Framed;
 
-use crate::broker::PacketBroker;
 use crate::client::ClientHandler;
 use crate::config::{ServerConfig, WorldGenConfig};
 use crate::mc::{codec::MinecraftCodec, proto::Packet};
-use crate::model::Server;
+use crate::server::ServerHandler;
 use crate::world::random_seed;
 use crate::world::sched::GenerationScheduler;
 use crate::world::{gen::WorldGenerator, World};
@@ -44,28 +43,28 @@ async fn main() -> io::Result<()> {
 
     info!("Binding TCP listener...");
     let listener = TcpListener::bind(server.config.net_endpoint.as_str()).await?;
-    let broker = PacketBroker::new();
 
     info!("Done. Server started in {:?}", startup_sw.elapsed());
 
     loop {
         let (stream, _) = listener.accept().await?;
+        let client_id = server.new_id();
         handle_client(
+            client_id,
             stream,
-            broker.new_unicast().await,
-            broker.new_broadcast(),
+            server.add_client(client_id),
             server.clone(),
         );
     }
 }
 
-fn create_server() -> Server {
+fn create_server() -> Arc<ServerHandler> {
     let config = Arc::new(ServerConfig::load(SERVER_CONFIG_PATH));
     debug!("Loaded config: {:?}", config);
 
     let world = Arc::new(World::new());
     let gen = create_world_gen(&config, &world);
-    Server::new(config, world, gen)
+    ServerHandler::start(config, world, gen)
 }
 
 fn create_world_gen(
@@ -89,19 +88,19 @@ fn create_world_gen(
 }
 
 fn handle_client(
+    id: i32,
     in_stream: TcpStream,
-    out_stream: mpsc::Receiver<Packet>,
-    broadcast: mpsc::Sender<Packet>,
-    server: Server,
+    unicast_rx: mpsc::Receiver<Packet>,
+    server: Arc<ServerHandler>,
 ) {
     tokio::spawn(async move {
         let client_addr = in_stream.peer_addr().unwrap();
         debug!("Client {:?} connected", client_addr);
 
         let codec = MinecraftCodec::new();
-        let in_stream = Framed::new(in_stream, codec);
+        let msg_stream = Framed::new(in_stream, codec);
 
-        let mut handler = ClientHandler::new(in_stream, out_stream, broadcast, server);
+        let mut handler = ClientHandler::new(id, msg_stream, unicast_rx, server);
         handler.loop_until_disconnect().await;
 
         debug!("Client {:?} disconnected", client_addr);
