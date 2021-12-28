@@ -235,6 +235,10 @@ pub enum Packet {
         location: BlockPos,
         face: u8,
     },
+    C10SetCreativeSlot {
+        slot_id: i16,
+        item: ItemStack,
+    },
     S00KeepAlive {
         timestamp: i32,
     },
@@ -325,6 +329,7 @@ impl Packet {
             &Packet::C05PlayerRot { .. } => 0x05,
             &Packet::C06PlayerPosRot { .. } => 0x06,
             &Packet::C07PlayerDigging { .. } => 0x07,
+            &Packet::C10SetCreativeSlot { .. } => 0x10,
             &Packet::S00KeepAlive { .. } => 0x00,
             &Packet::S01JoinGame { .. } => 0x01,
             &Packet::S02ChatMessage { .. } => 0x02,

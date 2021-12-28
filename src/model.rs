@@ -1,3 +1,4 @@
+use bytes::{Buf, BytesMut};
 use rand::Rng;
 use serde_derive::Deserialize;
 use uuid::Uuid;
@@ -24,11 +25,40 @@ impl From<u8> for GameMode {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ItemStack {
-    pub id: u16,
+    pub id: i16,
     pub count: u8,
     pub damage: u16,
+}
+
+impl Default for ItemStack {
+    fn default() -> Self {
+        Self {
+            id: -1,
+            count: 0,
+            damage: 0,
+        }
+    }
+}
+
+impl ItemStack {
+    pub fn read(buf: &mut BytesMut) -> ItemStack {
+        let mut stack = ItemStack {
+            id: buf.get_i16(),
+            count: 0,
+            damage: 0,
+        };
+        if stack.id != -1 {
+            stack.count = buf.get_u8();
+            stack.damage = buf.get_u16();
+        }
+        stack
+    }
+
+    pub fn is_present(&self) -> bool {
+        self.id != -1
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
@@ -75,6 +105,7 @@ pub struct Player {
     pub game_mode: GameMode,
     pub fly_speed: f32,
     pub walk_speed: f32,
+    pub inventory: Vec<ItemStack>,
 }
 
 impl Player {
@@ -88,11 +119,16 @@ impl Player {
             game_mode,
             fly_speed: 0.05,
             walk_speed: 0.1,
+            inventory: vec![ItemStack::default(); 45],
         }
     }
 
     pub fn is_logged_in(&self) -> bool {
         !self.username.is_empty()
+    }
+
+    pub fn item_stack_at(&mut self, id: i16) -> &mut ItemStack {
+        return &mut self.inventory[id as usize];
     }
 }
 

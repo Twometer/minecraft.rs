@@ -9,6 +9,7 @@ use crate::{
         proto::{DiggingStatus, EntityMetaData, Packet, PlayState, PlayerListItemAction},
         zlib,
     },
+    model::ItemStack,
     world::BlockPos,
 };
 
@@ -201,6 +202,10 @@ impl MinecraftCodec {
                 location: BlockPos::from(buf.get_u64()),
                 face: buf.get_u8(),
             }),
+            0x10 => Some(Packet::C10SetCreativeSlot {
+                slot_id: buf.get_i16(),
+                item: ItemStack::read(buf),
+            }),
             _ => None,
         }
     }
@@ -346,7 +351,7 @@ impl MinecraftCodec {
                         EntityMetaData::Float(v) => buf.put_f32(v),
                         EntityMetaData::String(v) => buf.put_string(v.as_str()),
                         EntityMetaData::Slot(itm) => {
-                            buf.put_u16(itm.id);
+                            buf.put_i16(itm.id);
                             buf.put_u8(itm.count);
                             buf.put_u16(itm.damage);
                             buf.put_u8(0);

@@ -3,7 +3,7 @@ use std::{ops::Add, sync::Arc, time::Duration};
 use dashmap::DashSet;
 use futures::{SinkExt, StreamExt};
 use indoc::indoc;
-use log::{error, info, trace};
+use log::{debug, error, info, trace};
 use serde_json::json;
 use tokio::{
     io,
@@ -277,7 +277,7 @@ impl ClientHandler {
                                     entries: vec![EntityMetaEntry::new(
                                         10,
                                         EntityMetaData::Slot(ItemStack {
-                                            id: block_id,
+                                            id: block_id as i16,
                                             count: 1,
                                             damage: block_meta,
                                         }),
@@ -288,13 +288,33 @@ impl ClientHandler {
                     }
                 }
             }
-            Packet::C04PlayerPos { x, z, .. } => {
+            Packet::C04PlayerPos { x, y, z, .. } => {
+                self.player.position.x = x;
+                self.player.position.y = y;
+                self.player.position.z = z;
                 self.update_chunks(ChunkPos::from_block_pos(x as i32, z as i32))
                     .await?;
             }
-            Packet::C06PlayerPosRot { x, z, .. } => {
+            Packet::C06PlayerPosRot {
+                x,
+                y,
+                z,
+                yaw,
+                pitch,
+                ..
+            } => {
+                self.player.position.x = x;
+                self.player.position.y = y;
+                self.player.position.z = z;
+                self.player.rotation.x = yaw;
+                self.player.rotation.y = pitch;
                 self.update_chunks(ChunkPos::from_block_pos(x as i32, z as i32))
                     .await?;
+            }
+            Packet::C10SetCreativeSlot { slot_id, item } => {
+                debug!("Set slot {:?} to {:?}", slot_id, item);
+                let stack = self.player.item_stack_at(slot_id);
+                *stack = item;
             }
             _ => {
                 trace!("Received unhandled packet: {:?}", packet);
