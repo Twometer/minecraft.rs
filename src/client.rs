@@ -245,6 +245,12 @@ impl ClientHandler {
                         self.server
                             .world
                             .set_block(location.x, location.y, location.z, 0);
+                        self.server
+                            .send_broadcast(Packet::S23BlockChange {
+                                location,
+                                block_state: 0,
+                            })
+                            .await?;
                         if !is_creative {
                             let block_id = block_id!(block_state);
                             let block_meta = block_meta!(block_state);

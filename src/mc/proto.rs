@@ -259,14 +259,6 @@ pub enum Packet {
         pitch: f32,
         flags: u8,
     },
-    S21ChunkData {
-        x: i32,
-        z: i32,
-    },
-    S26MapChunkBulk {
-        skylight: bool,
-        chunks: Vec<Chunk>,
-    },
     S0ESpawnObject {
         entity_id: i32,
         kind: u8,
@@ -280,6 +272,18 @@ pub enum Packet {
     S1CEntityMeta {
         entity_id: i32,
         entries: Vec<EntityMetaEntry>,
+    },
+    S21ChunkData {
+        x: i32,
+        z: i32,
+    },
+    S23BlockChange {
+        location: BlockPos,
+        block_state: u16,
+    },
+    S26MapChunkBulk {
+        skylight: bool,
+        chunks: Vec<Chunk>,
     },
     S2BChangeGameState {
         reason: GameStateReason,
@@ -325,10 +329,11 @@ impl Packet {
             &Packet::S01JoinGame { .. } => 0x01,
             &Packet::S02ChatMessage { .. } => 0x02,
             &Packet::S08SetPlayerPosition { .. } => 0x08,
+            &Packet::S0ESpawnObject { .. } => 0x0E,
             &Packet::S1CEntityMeta { .. } => 0x1C,
             &Packet::S21ChunkData { .. } => 0x21,
+            &Packet::S23BlockChange { .. } => 0x23,
             &Packet::S26MapChunkBulk { .. } => 0x26,
-            &Packet::S0ESpawnObject { .. } => 0x0E,
             &Packet::S2BChangeGameState { .. } => 0x2B,
             &Packet::S38PlayerListItem { .. } => 0x38,
             &Packet::S39PlayerAbilities { .. } => 0x39,

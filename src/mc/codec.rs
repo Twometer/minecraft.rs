@@ -261,6 +261,13 @@ impl MinecraftCodec {
                 buf.put_u16(0);
                 buf.put_var_int(0);
             }
+            Packet::S23BlockChange {
+                location,
+                block_state,
+            } => {
+                buf.put_u64(location.to_u64());
+                buf.put_var_int(block_state as i32);
+            }
             Packet::S26MapChunkBulk { skylight, chunks } => {
                 buf.put_bool(skylight);
                 buf.put_var_int(chunks.len() as i32);

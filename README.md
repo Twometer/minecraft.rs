@@ -12,6 +12,7 @@ A high-performance Minecraft server in Rust
         -   Per-biome feature distribution (grass, trees, ...)
     -   [x] Configurable ore generation
     -   [x] Configurable cave generation
+    -   [ ] Disk storage
 -   [ ] Basic Minecraft features
     -   [ ] Synchronize player movement and block interaction
     -   [ ] Inventory & crafting system
