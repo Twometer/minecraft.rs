@@ -62,7 +62,8 @@ impl WorldGenerator {
 
     fn generate_column(&self, chunk: &mut Chunk, x: i32, z: i32, world_x: i32, world_z: i32) {
         let (elevation, biome) = self.sample_biome(world_x, world_z);
-        let interp_scale = self.multi_sample_biome_scale(world_x, world_z, 3);
+        let interp_scale =
+            self.multi_sample_biome_scale(world_x, world_z, self.config.biome_smoothing);
 
         let noise_val = elevation * interp_scale;
         let terrain_height = (noise_val * 16.0) as i32 + 64;
@@ -109,6 +110,7 @@ impl WorldGenerator {
     }
 
     fn generate_feature(&self, feature: &str, chunk: &mut Chunk, x: i32, top_y: i32, z: i32) {
+        let random_offset = rand::thread_rng().gen_range(-1..=1);
         match feature {
             "grass" => {
                 chunk.set_block_if_air(x, top_y, z, block_state!(31, 1));
@@ -138,12 +140,12 @@ impl WorldGenerator {
                 chunk.set_block(x, top_y - 1, z, block_state!(1, 5));
             }
             "cacti" => {
-                for i in 0..3 {
+                for i in 0..3 + random_offset {
                     chunk.set_block(x, top_y + i, z, block_state!(81, 0));
                 }
             }
             "icicles" => {
-                for i in 0..3 {
+                for i in 0..3 + random_offset {
                     chunk.set_block(x, top_y + i, z, block_state!(174, 0));
                 }
             }
@@ -153,7 +155,7 @@ impl WorldGenerator {
                     x,
                     top_y,
                     z,
-                    6,
+                    6 + random_offset,
                     block_state!(17, 0),
                     block_state!(18, 0),
                 );
@@ -164,18 +166,19 @@ impl WorldGenerator {
                     x,
                     top_y,
                     z,
-                    6,
+                    6 + random_offset,
                     block_state!(17, 1),
                     block_state!(18, 1),
                 );
             }
             "jungle_tree" => {
+                let huge_tree = rand::thread_rng().gen_range(0..=10);
                 Self::generate_tree(
                     chunk,
                     x,
                     top_y,
                     z,
-                    9,
+                    9 + random_offset + huge_tree,
                     block_state!(17, 3),
                     block_state!(18, 3),
                 );
@@ -209,7 +212,8 @@ impl WorldGenerator {
                         }
                     }
                 }
-            } else if i < height - 2 {
+            }
+            if i < height - 2 {
                 chunk.set_block(x, y + i, z, trunk_block);
             }
         }
@@ -241,16 +245,16 @@ impl WorldGenerator {
             self.config.cave_lac,
         );
         let n2 = self.sample_cave_noise_fractal(
-            world_x + 1024,
-            y,
-            world_z + 1024,
+            world_x,
+            y - 16384,
+            world_z,
             self.config.cave_scale,
             self.config.cave_lac,
         );
 
         let height_gradient = (y as f64) / (h as f64); // [0..1]
         let cave_th = self.config.cave_grad_base + height_gradient * self.config.cave_grad_scale;
-        n1 > cave_th && n2 > cave_th
+        n1.abs() > cave_th && n2.abs() > cave_th
     }
 
     fn determine_block(

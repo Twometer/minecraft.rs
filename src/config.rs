@@ -40,6 +40,7 @@ pub struct OreConfig {
 pub struct WorldGenConfig {
     pub master_scale: f64,
     pub ocean_level: f64,
+    pub biome_smoothing: i32,
     pub octaves: i32,
     pub falloff: f64,
     pub elevation_scale: f64,

@@ -1,9 +1,9 @@
 ## Server config ##
-motd = "Hello from §6minecraft.rs\n§rpowered by §aT§bo§ck§di§eo"
+motd = "§rHello from the §6§lminecraft.rs§r server\npowered by §bTokio§r and §eRust§r"
 slots = 20
 game_mode = "Creative"
 difficulty = 0
 net_endpoint = "127.0.0.1:25565"
 net_compression = 256
-generator_threads = 32
+generator_threads = 16
 view_dist = 10

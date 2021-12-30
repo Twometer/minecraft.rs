@@ -22,7 +22,7 @@ impl GenerationScheduler {
         num_threads: u32,
     ) -> GenerationScheduler {
         let (tx, rx) = flume::unbounded();
-        let (completion_bc, _) = broadcast::channel::<ChunkPos>(32);
+        let (completion_bc, _) = broadcast::channel::<ChunkPos>(128);
 
         let scheduler = GenerationScheduler {
             world,
@@ -73,10 +73,11 @@ impl GenerationScheduler {
         }
 
         while !remaining_chunks.is_empty() {
-            let generated_chunk = receiver.recv().await;
-            if generated_chunk.is_ok() {
-                remaining_chunks.remove(&generated_chunk.unwrap());
-            }
+            let generated_chunk = receiver
+                .recv()
+                .await
+                .expect("Failed to read chunk completion");
+            remaining_chunks.remove(&generated_chunk);
         }
     }
 

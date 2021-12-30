@@ -286,6 +286,6 @@ impl World {
 pub fn random_seed() -> u32 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .unwrap()
+        .expect("Failed to get UNIX time")
         .as_secs() as u32
 }

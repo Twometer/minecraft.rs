@@ -1,6 +1,7 @@
 ## World generator config ##
-master_scale = 5.5
+master_scale = 5.45
 ocean_level = 0.02
+biome_smoothing = 4
 
 # Noise config
 octaves = 4
@@ -21,8 +22,8 @@ river_lac = 2.4
 
 cave_scale = 0.05
 cave_lac = 1.25
-cave_grad_base = 0.05
-cave_grad_scale = 0.185
+cave_grad_base = 0.14
+cave_grad_scale = 0.19
 
 # Biome config
 [biomes]
@@ -77,7 +78,7 @@ cave_grad_scale = 0.185
     [biomes.river]
     id = 7
     temperature = 0.4
-    scale = -0.5
+    scale = 0
     layer = "River"
     blocks = [9, 9, 13]
     sea_level = true
@@ -85,7 +86,7 @@ cave_grad_scale = 0.185
     [biomes.frozen_river]
     id = 11
     temperature = -0.4
-    scale = -0.5
+    scale = 0
     layer = "River"
     blocks = [79, 9, 13]
     sea_level = true
@@ -94,27 +95,27 @@ cave_grad_scale = 0.185
     [biomes.jungle]
     id = 21
     temperature = 0.65
-    moisture = 0.75
+    moisture = 0.65
     elevation = 0.25
     scale = 1.0
     layer = "Land"
     blocks = [2, 3, 3]
-    features = { grass = 0.5, bushes = 0.35, jungle_tree = 0.03 }
+    features = { grass = 0.5, bushes = 0.35, jungle_tree = 0.045 }
 
     [biomes.jungle_hills]
     id = 22
     temperature = 0.65
-    moisture = 0.75
+    moisture = 0.65
     elevation = 0.25
-    scale = 2.5
+    scale = 2.25
     layer = "Land"
     blocks = [2, 3, 3]
-    features = { grass = 0.5, bushes = 0.35, jungle_tree = 0.03 }
+    features = { grass = 0.5, bushes = 0.35, jungle_tree = 0.045 }
 
     [biomes.desert]
     id = 2
     temperature = 0.75
-    moisture = 0.25
+    moisture = 0.15
     elevation = 0.0
     scale = 1.0
     layer = "Land"
@@ -123,10 +124,10 @@ cave_grad_scale = 0.185
 
     [biomes.desert_hills]
     id = 17
-    temperature = 0.55
-    moisture = 0.25
+    temperature = 0.65
+    moisture = 0.15
     elevation = 1.0
-    scale = 2.5
+    scale = 2.25
     layer = "Land"
     blocks = [12, 12, 24]
     features = { cacti = 0.002, dead_bushes = 0.006 }
@@ -136,7 +137,7 @@ cave_grad_scale = 0.185
     temperature = 0.35
     moisture = 0.35
     elevation = 0.0
-    scale = 0.5
+    scale = 0.35
     layer = "Land"
     blocks = [2, 3, 3]
     features = { grass = 0.4, flowers = 0.05, warm_tree = 0.002 }
@@ -146,7 +147,7 @@ cave_grad_scale = 0.185
     temperature = -0.55
     moisture = 0.35
     elevation = 0.0
-    scale = 0.5
+    scale = 0.35
     layer = "Land"
     blocks = [2, 3, 3]
     surface_layer = 78
@@ -157,7 +158,7 @@ cave_grad_scale = 0.185
     temperature = -0.25
     moisture = 0.75
     elevation = 0.0
-    scale = 0.5
+    scale = 0.25
     layer = "Land"
     blocks = [2, 3, 3]
     features = { puddles = 0.5, lilypads = 0.06, warm_tree = 0.002 }
@@ -167,7 +168,7 @@ cave_grad_scale = 0.185
     temperature = 0.35
     moisture = 0.5
     elevation = 0.25
-    scale = 0.95
+    scale = 0.75
     layer = "Land"
     blocks = [2, 3, 3]
     features = { grass = 0.4, flowers = 0.05, fern = 0.04, mushrooms = 0.04, warm_tree = 0.03 }
@@ -196,11 +197,22 @@ cave_grad_scale = 0.185
     [biomes.mountains]
     id = 3
     temperature = 0.18
-    moisture = 0.2
+    moisture = 0.19
     elevation = 1.0
-    scale = 2
+    scale = 3.75
     layer = "Land"
     blocks = [1, 1, 1]
+    features = { mushrooms = 0.005 }
+
+    [biomes.extreme_mountains]
+    id = 34
+    temperature = -0.17
+    moisture = 0.15
+    elevation = 1.25
+    scale = 6.5
+    layer = "Land"
+    blocks = [1, 1, 1]
+    surface_layer = 78
     features = { mushrooms = 0.005 }
 
     [biomes.ice_mountains]
@@ -208,7 +220,7 @@ cave_grad_scale = 0.185
     temperature = -0.8
     moisture = -0.25
     elevation = 1.0
-    scale = 2
+    scale = 4.75
     layer = "Land"
     blocks = [1, 1, 1]
     surface_layer = 78
