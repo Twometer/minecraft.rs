@@ -10,7 +10,7 @@ use crate::{
         zlib,
     },
     model::ItemStack,
-    world::BlockPos,
+    world::{BlockFace, BlockPos},
 };
 
 const PACKET_SIZE_LIMIT: usize = 2 * 1024 * 1024;
@@ -202,6 +202,14 @@ impl MinecraftCodec {
                 location: BlockPos::from(buf.get_u64()),
                 face: buf.get_u8(),
             }),
+            0x08 => Some(Packet::C08PlayerBlockPlacement {
+                location: BlockPos::from(buf.get_u64()),
+                face: BlockFace::from(buf.get_u8()),
+            }),
+            0x09 => Some(Packet::C09HeldItemChange {
+                slot: buf.get_i16(),
+            }),
+            0x0A => Some(Packet::C0AAnimation),
             0x10 => Some(Packet::C10SetCreativeSlot {
                 slot_id: buf.get_i16(),
                 item: ItemStack::read(buf),

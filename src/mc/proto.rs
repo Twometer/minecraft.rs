@@ -1,6 +1,6 @@
 use crate::{
     model::{GameMode, ItemStack},
-    world::{BlockPos, Chunk},
+    world::{BlockFace, BlockPos, Chunk},
 };
 
 #[derive(Debug, Clone)]
@@ -235,6 +235,14 @@ pub enum Packet {
         location: BlockPos,
         face: u8,
     },
+    C08PlayerBlockPlacement {
+        location: BlockPos,
+        face: BlockFace,
+    },
+    C09HeldItemChange {
+        slot: i16,
+    },
+    C0AAnimation,
     C10SetCreativeSlot {
         slot_id: i16,
         item: ItemStack,
@@ -329,6 +337,9 @@ impl Packet {
             &Packet::C05PlayerRot { .. } => 0x05,
             &Packet::C06PlayerPosRot { .. } => 0x06,
             &Packet::C07PlayerDigging { .. } => 0x07,
+            &Packet::C08PlayerBlockPlacement { .. } => 0x08,
+            &Packet::C09HeldItemChange { .. } => 0x09,
+            &Packet::C0AAnimation { .. } => 0x09,
             &Packet::C10SetCreativeSlot { .. } => 0x10,
             &Packet::S00KeepAlive { .. } => 0x00,
             &Packet::S01JoinGame { .. } => 0x01,

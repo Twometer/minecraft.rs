@@ -73,8 +73,10 @@ impl GenerationScheduler {
         }
 
         while !remaining_chunks.is_empty() {
-            let generated_chunk = receiver.recv().await.unwrap();
-            remaining_chunks.remove(&generated_chunk);
+            let generated_chunk = receiver.recv().await;
+            if generated_chunk.is_ok() {
+                remaining_chunks.remove(&generated_chunk.unwrap());
+            }
         }
     }
 

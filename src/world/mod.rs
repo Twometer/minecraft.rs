@@ -30,6 +30,32 @@ macro_rules! block_meta {
     };
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BlockFace {
+    NegY,
+    PosY,
+    NegZ,
+    PosZ,
+    NegX,
+    PosX,
+    Special = 255,
+}
+
+impl From<u8> for BlockFace {
+    fn from(val: u8) -> Self {
+        match val {
+            0 => Self::NegY,
+            1 => Self::PosY,
+            2 => Self::NegZ,
+            3 => Self::PosZ,
+            4 => Self::NegX,
+            5 => Self::PosX,
+            255 => Self::Special,
+            _ => panic!("Invalid block face"),
+        }
+    }
+}
+
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
 pub struct BlockPos {
     pub x: i32,
@@ -48,6 +74,18 @@ impl BlockPos {
             x: x.abs() as i32,
             y: y.abs() as i32,
             z: z.abs() as i32,
+        }
+    }
+
+    pub fn offset(&self, face: BlockFace) -> BlockPos {
+        match face {
+            BlockFace::PosY => BlockPos::new(self.x, self.y + 1, self.z),
+            BlockFace::NegY => BlockPos::new(self.x, self.y - 1, self.z),
+            BlockFace::PosZ => BlockPos::new(self.x, self.y, self.z + 1),
+            BlockFace::NegZ => BlockPos::new(self.x, self.y, self.z - 1),
+            BlockFace::PosX => BlockPos::new(self.x + 1, self.y, self.z),
+            BlockFace::NegX => BlockPos::new(self.x - 1, self.y, self.z),
+            _ => panic!("Cannot offset BlockPos by {:?}", face),
         }
     }
 

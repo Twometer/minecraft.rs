@@ -15,7 +15,7 @@ use tokio::{
 use tokio_util::codec::Framed;
 
 use crate::{
-    block_id, block_meta, chat_packet,
+    block_id, block_meta, block_state, chat_packet,
     command::Command,
     mc::{
         codec::MinecraftCodec,
@@ -26,7 +26,7 @@ use crate::{
     },
     model::{GameMode, ItemStack, Player},
     server::ServerHandler,
-    world::{Chunk, ChunkPos, MutexChunkRef},
+    world::{BlockFace, BlockPos, Chunk, ChunkPos, MutexChunkRef},
 };
 
 pub struct ClientHandler {
@@ -230,6 +230,33 @@ impl ClientHandler {
                         .await?;
                 }
             }
+            Packet::C04PlayerPos { x, y, z, .. } => {
+                self.player.position.x = x;
+                self.player.position.y = y;
+                self.player.position.z = z;
+                self.update_chunks(ChunkPos::from_block_pos(x as i32, z as i32))
+                    .await?;
+            }
+            Packet::C05PlayerRot { yaw, pitch, .. } => {
+                self.player.rotation.x = yaw;
+                self.player.rotation.y = pitch;
+            }
+            Packet::C06PlayerPosRot {
+                x,
+                y,
+                z,
+                yaw,
+                pitch,
+                ..
+            } => {
+                self.player.position.x = x;
+                self.player.position.y = y;
+                self.player.position.z = z;
+                self.player.rotation.x = yaw;
+                self.player.rotation.y = pitch;
+                self.update_chunks(ChunkPos::from_block_pos(x as i32, z as i32))
+                    .await?;
+            }
             Packet::C07PlayerDigging {
                 location, status, ..
             } => {
@@ -242,15 +269,7 @@ impl ClientHandler {
                         .world
                         .get_block(location.x, location.y, location.z);
                     if block_state != 0 {
-                        self.server
-                            .world
-                            .set_block(location.x, location.y, location.z, 0);
-                        self.server
-                            .send_broadcast(Packet::S23BlockChange {
-                                location,
-                                block_state: 0,
-                            })
-                            .await?;
+                        self.change_block(location, 0).await?;
                         if !is_creative {
                             let block_id = block_id!(block_state);
                             let block_meta = block_meta!(block_state);
@@ -288,29 +307,33 @@ impl ClientHandler {
                     }
                 }
             }
-            Packet::C04PlayerPos { x, y, z, .. } => {
-                self.player.position.x = x;
-                self.player.position.y = y;
-                self.player.position.z = z;
-                self.update_chunks(ChunkPos::from_block_pos(x as i32, z as i32))
-                    .await?;
+            Packet::C08PlayerBlockPlacement { location, face } => {
+                if face != BlockFace::Special {
+                    let block_state = self
+                        .server
+                        .world
+                        .get_block(location.x, location.y, location.z);
+
+                    // Tall grass is replaced, therefore the offset is ignored
+                    let new_loc = if block_id!(block_state) == 31 {
+                        location
+                    } else {
+                        location.offset(face)
+                    };
+
+                    // Set the corresponding block, if the held item allows it
+                    let held_item_stack =
+                        self.player.item_stack_in_hotbar(self.player.selected_slot);
+                    if held_item_stack.is_present() && held_item_stack.is_block() {
+                        let new_state = block_state!(held_item_stack.id, held_item_stack.damage);
+                        self.change_block(new_loc, new_state).await?;
+                    }
+                }
             }
-            Packet::C06PlayerPosRot {
-                x,
-                y,
-                z,
-                yaw,
-                pitch,
-                ..
-            } => {
-                self.player.position.x = x;
-                self.player.position.y = y;
-                self.player.position.z = z;
-                self.player.rotation.x = yaw;
-                self.player.rotation.y = pitch;
-                self.update_chunks(ChunkPos::from_block_pos(x as i32, z as i32))
-                    .await?;
+            Packet::C09HeldItemChange { slot } => {
+                self.player.selected_slot = slot;
             }
+            Packet::C0AAnimation { .. } => {}
             Packet::C10SetCreativeSlot { slot_id, item } => {
                 debug!("Set slot {:?} to {:?}", slot_id, item);
                 let stack = self.player.item_stack_at(slot_id);
@@ -383,6 +406,18 @@ impl ClientHandler {
             }
             _ => return Err(format!("{}: Unknown command.", command.name())),
         }
+    }
+
+    async fn change_block(&mut self, location: BlockPos, block_state: u16) -> io::Result<()> {
+        self.server
+            .world
+            .set_block(location.x, location.y, location.z, block_state);
+        self.server
+            .send_broadcast(Packet::S23BlockChange {
+                location,
+                block_state,
+            })
+            .await
     }
 
     async fn change_game_mode(&mut self, game_mode: GameMode) -> io::Result<()> {

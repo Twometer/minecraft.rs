@@ -59,6 +59,10 @@ impl ItemStack {
     pub fn is_present(&self) -> bool {
         self.id != -1
     }
+
+    pub fn is_block(&self) -> bool {
+        self.id <= 255
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
@@ -106,6 +110,7 @@ pub struct Player {
     pub fly_speed: f32,
     pub walk_speed: f32,
     pub inventory: Vec<ItemStack>,
+    pub selected_slot: i16,
 }
 
 impl Player {
@@ -120,6 +125,7 @@ impl Player {
             fly_speed: 0.05,
             walk_speed: 0.1,
             inventory: vec![ItemStack::default(); 45],
+            selected_slot: 0,
         }
     }
 
@@ -129,6 +135,10 @@ impl Player {
 
     pub fn item_stack_at(&mut self, id: i16) -> &mut ItemStack {
         return &mut self.inventory[id as usize];
+    }
+
+    pub fn item_stack_in_hotbar(&mut self, id: i16) -> &mut ItemStack {
+        self.item_stack_at(36 + id) // offset for hotbar is slot #36
     }
 }
 
