@@ -6,4 +6,4 @@ difficulty = 0
 net_endpoint = "127.0.0.1:25565"
 net_compression = 256
 generator_threads = 16
-view_dist = 10
+view_dist = 12

@@ -4,8 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-deflate = "1.0.0"
-inflate = "0.4.5"
+flate2 = { version = "1.0.22", features = ["zlib-ng-compat"], default-features = false }
 log = "0.4.14"
 pretty_env_logger = "0.4.0"
 serde = "1.0.131"

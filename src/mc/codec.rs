@@ -309,8 +309,8 @@ impl MinecraftCodec {
                     }
 
                     // Write dummy lighting (Max value everywhere) to data buffer
-                    for _ in 0..(4096 * num_sections) {
-                        chunk_buf.put_u8(0xff);
+                    for _ in 0..(4096 * num_sections / 8) {
+                        chunk_buf.put_u64(0xffffffffffffffff);
                     }
 
                     // Write biomes to data buffer

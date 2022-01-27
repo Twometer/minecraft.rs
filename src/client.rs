@@ -497,8 +497,8 @@ impl ClientHandler {
         }
 
         // Split into packets
-        let chunks_per_packet = 10;
-
+        let chunks_per_packet = 5;
+        let mut packets: Vec<_> = Vec::new();
         for packet_chunk_refs in chunk_refs.chunks(chunks_per_packet) {
             // Lock and copy chunks for the network
             let mut chunks = Vec::<Chunk>::new();
@@ -506,12 +506,16 @@ impl ClientHandler {
                 chunks.push(chunk_ref.lock().unwrap().clone())
             }
 
-            // Send chunks
-            self.send_packet(Packet::S26MapChunkBulk {
+            // Collect chunk packets
+            packets.push(Packet::S26MapChunkBulk {
                 skylight: true,
                 chunks,
-            })
-            .await?;
+            });
+        }
+
+        // Send the packets
+        for packet in packets {
+            self.send_packet(packet).await?;
         }
 
         Ok(())
